@@ -1,0 +1,4 @@
+# pnpm 11 起，项目设置统一放在这里（package.json 的 pnpm 字段已不再读取）
+# vite 依赖 esbuild，它需要执行安装脚本以就位平台二进制，这里显式放行
+allowBuilds:
+  esbuild: true

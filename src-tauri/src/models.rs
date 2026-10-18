@@ -134,6 +134,18 @@ pub struct ServerStatus {
     pub address: String,
 }
 
+/// 自动同步供应商模型的结果
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncModelsResult {
+    pub provider: String,
+    /// 供应商返回的模型总数
+    pub total: usize,
+    /// 本次新入库的数量
+    pub added: usize,
+    pub models: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TrendPoint {

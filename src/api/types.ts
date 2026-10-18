@@ -96,6 +96,24 @@ export interface ServerStatus {
   address: string;
 }
 
+/** 内置的常用供应商预设：选一个、填 Key 即可 */
+export interface ProviderPreset {
+  id: string;
+  name: string;
+  baseUrl: string;
+  homepage: string;
+  note: string;
+  models: string[];
+}
+
+/** 自动同步供应商模型的结果 */
+export interface SyncModelsResult {
+  provider: string;
+  total: number;
+  added: number;
+  models: string[];
+}
+
 export interface TrendPoint {
   date: string;
   count: number;

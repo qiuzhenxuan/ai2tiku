@@ -110,7 +110,7 @@ onMounted(load);
         </div>
         <div class="card__body stack" style="gap: 10px">
           <div class="step"><span class="step__idx">1</span>打开 OCS 脚本设置，找到「题库配置」。</div>
-          <div class="step"><span class="step__idx">2</span>把右侧生成的 JSON 完整粘贴进去并保存。</div>
+          <div class="step"><span class="step__idx">2</span>把订阅链接或下面的 JSON 填进去并保存。</div>
           <div class="step"><span class="step__idx">3</span>回到网课页面，开启自动答题即可。</div>
           <div class="step"><span class="step__idx">4</span>本题库会先用本地缓存命中，未命中再交给 AI 作答。</div>
         </div>
@@ -119,8 +119,31 @@ onMounted(load);
 
     <div class="card">
       <div class="card__head">
+        <AppIcon name="globe" :size="15" />
+        <span class="card__title">订阅链接（推荐，最省事）</span>
+        <button
+          class="btn btn--primary btn--sm"
+          style="margin-left: auto"
+          type="button"
+          @click="copy(`${status?.address ?? ''}/ocs`, '订阅链接')"
+        >
+          <AppIcon name="copy" :size="13" />
+          复制链接
+        </button>
+      </div>
+      <div class="card__body stack">
+        <div class="code">{{ status?.address ?? "http://127.0.0.1" }}/ocs</div>
+        <p class="faint small">
+          OCS 的题库配置既支持粘贴下面那段 JSON，<strong>也支持填一个「订阅链接」</strong>——
+          打开后返回同样格式即可。所以你也可以直接把这个地址填进题库配置，以后改端口或换模型都不用再动 OCS。
+        </p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card__head">
         <AppIcon name="copy" :size="15" />
-        <span class="card__title">题库配置（直接粘贴给 OCS）</span>
+        <span class="card__title">题库配置 JSON（粘贴给 OCS）</span>
         <button class="btn btn--primary btn--sm" style="margin-left: auto" type="button" @click="copy(config, '题库配置')">
           <AppIcon name="copy" :size="13" />
           复制配置

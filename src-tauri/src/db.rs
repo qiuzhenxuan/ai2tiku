@@ -334,6 +334,57 @@ impl Db {
         Ok(())
     }
 
+    /// 批量把供应商返回的模型写入题库；
+    /// 已存在的跳过；若整张表还没有默认模型，把第一个新入库的设为默认。
+    /// 返回本次新增的数量。
+    pub fn upsert_models(&self, provider_id: i64, names: &[String]) -> R<usize> {
+        if names.is_empty() {
+            return Ok(0);
+        }
+        let conn = self.lock()?;
+        let existing: Vec<String> = {
+            let mut stmt = conn
+                .prepare("SELECT model FROM models WHERE provider_id = ?1")
+                .map_err(err)?;
+            let rows = stmt
+                .query_map(params![provider_id], |r| r.get::<_, String>(0))
+                .map_err(err)?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(err)?;
+            rows
+        };
+        let has_default: bool = conn
+            .query_row(
+                "SELECT COUNT(*) FROM models WHERE is_default = 1",
+                [],
+                |r| r.get::<_, i64>(0),
+            )
+            .map_err(err)?
+            > 0;
+
+        let mut added = 0usize;
+        let mut made_default = false;
+        for name in names {
+            if existing.iter().any(|e| e == name) {
+                continue;
+            }
+            let is_default = if !has_default && !made_default {
+                made_default = true;
+                1
+            } else {
+                0
+            };
+            conn.execute(
+                "INSERT INTO models(provider_id, model, display_name, temperature, max_tokens, enabled, is_default)
+                 VALUES(?1,?2,?2,0.3,1024,1,?3)",
+                params![provider_id, name, is_default],
+            )
+            .map_err(err)?;
+            added += 1;
+        }
+        Ok(added)
+    }
+
     /// 取默认启用的模型 + 其供应商
     pub fn active_model(&self) -> R<Option<(Provider, AiModel)>> {
         let conn = self.lock()?;

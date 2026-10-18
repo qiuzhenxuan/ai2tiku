@@ -1,6 +1,6 @@
 use crate::models::*;
+use crate::presets::ProviderPreset;
 use crate::state::SharedState;
-use serde_json::json;
 use tauri::State;
 
 type R<T> = Result<T, String>;
@@ -154,25 +154,47 @@ pub fn get_stats(state: State<'_, SharedState>) -> R<Stats> {
 #[tauri::command]
 pub fn build_ocs_config(state: State<'_, SharedState>) -> R<String> {
     let settings = state.db.settings()?;
-    let url = format!("{}/api/search", crate::server::address(settings.port));
-    let config = json!([
-        {
-            "name": "ai2tiku (本地 AI 题库)",
-            "homepage": crate::server::address(settings.port),
-            "url": url,
-            "method": "post",
-            "contentType": "json",
-            "type": "GM_xmlhttpRequest",
-            "headers": { "Content-Type": "application/json" },
-            "data": {
-                "title": "${title}",
-                "type": "${type}",
-                "options": "${options}"
-            },
-            "handler": "return (res)=> res.code === 1 ? [res.question, res.answer] : [res.msg, undefined]"
-        }
-    ]);
-    serde_json::to_string_pretty(&config).map_err(|e| e.to_string())
+    serde_json::to_string_pretty(&crate::ocs::config_value(settings.port))
+        .map_err(|e| e.to_string())
+}
+
+/// 内置的常用供应商预设（前端选择后只需填 Key）
+#[tauri::command]
+pub fn list_provider_presets() -> Vec<ProviderPreset> {
+    crate::presets::list()
+}
+
+/// 用 base_url + api_key 试探供应商的可选模型列表
+#[tauri::command]
+pub async fn fetch_models(
+    state: State<'_, SharedState>,
+    base_url: String,
+    api_key: String,
+) -> R<Vec<String>> {
+    crate::ai::fetch_models(&state.client, &base_url, &api_key).await
+}
+
+/// 拉取某供应商的模型并自动入库；新库第一次会顺便设好默认模型
+#[tauri::command]
+pub async fn sync_provider_models(
+    state: State<'_, SharedState>,
+    id: i64,
+) -> R<SyncModelsResult> {
+    let provider = state
+        .db
+        .list_providers()?
+        .into_iter()
+        .find(|p| p.id == id)
+        .ok_or_else(|| "供应商不存在".to_string())?;
+    let models =
+        crate::ai::fetch_models(&state.client, &provider.base_url, &provider.api_key).await?;
+    let added = state.db.upsert_models(id, &models)?;
+    Ok(SyncModelsResult {
+        provider: provider.name,
+        total: models.len(),
+        added,
+        models,
+    })
 }
 
 /// 在软件内直接跑一遍搜题链路，方便验证配置是否生效

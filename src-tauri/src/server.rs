@@ -24,12 +24,20 @@ pub fn router(state: SharedState) -> Router {
         .route("/", get(root))
         .route("/api/status", get(status_handler))
         .route("/api/search", get(search_get).post(search_post))
+        .route("/ocs", get(ocs_config))
         .layer(CorsLayer::permissive())
         .with_state(state)
 }
 
 async fn root() -> &'static str {
     "ai2tiku OCS 题库服务运行中"
+}
+
+/// GET /ocs —— OCS「订阅链接」端点：直接返回题库配置 JSON。
+/// OCS 的题库配置除了粘贴 JSON 字符串，也支持填一个会返回该 JSON 的链接。
+async fn ocs_config(State(state): State<SharedState>) -> Json<Value> {
+    let port = state.db.settings().map(|s| s.port).unwrap_or(3100);
+    Json(crate::ocs::config_value(port))
 }
 
 async fn status_handler(State(state): State<SharedState>) -> Json<ServerStatus> {

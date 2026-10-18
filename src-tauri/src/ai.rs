@@ -9,7 +9,7 @@ pub const DEFAULT_SYSTEM_PROMPT: &str = r#"你是一个严谨的答题助手。�
 answer 的填写规则：
 - 单选题、判断题：填选项字母，例如 "A"
 - 多选题：填选项字母数组，例如 ["A","C"]（按字母顺序，不要混入其它字符）
-- 填空题：填需要填写的内容文本
+- 填空题：只有一个空时填文本；有多个空时返回数组，按顺序对应每个空，例如 ["张三","李四"]
 - 如果确实无法确定答案，answer 填 ""（空字符串）"#;
 
 const TYPE_LABELS: &[(&str, &str)] = &[
@@ -77,8 +77,10 @@ fn extract_json(content: &str) -> Option<Value> {
     None
 }
 
-/// 把 AI 返回的 answer 字段转成 OCS 能识别的答案字符串
-/// 多选题返回 JSON 数组字符串（`["A","C"]`），OCS 的 splitAnswer 会直接 JSON.parse
+/// 把 AI 返回的 answer 字段转成 OCS 能识别的答案字符串。
+/// OCS 官方文档明确要求：多个答案用「特殊符号」连接，而不是写成数组
+/// （文档示例是 join('#')，FQA 里填空题多空也用 `张三#李四#王五`）。
+/// 所以这里多选字母、填空多空一律用 '#' 拼接。
 fn to_ocs_answer(v: Option<&Value>) -> String {
     match v {
         Some(Value::Array(items)) => {
@@ -90,7 +92,7 @@ fn to_ocs_answer(v: Option<&Value>) -> String {
                 })
                 .filter(|s| !s.is_empty())
                 .collect();
-            serde_json::to_string(&list).unwrap_or_default()
+            list.join("#")
         }
         Some(Value::String(s)) => s.trim().to_string(),
         Some(Value::Null) | None => String::new(),
@@ -202,10 +204,11 @@ pub async fn ask(
         } else if qtype == "multiple" {
             let letters = guess_letters(&content);
             if !letters.is_empty() {
-                answer = serde_json::to_string(
-                    &letters.chars().map(|c| c.to_string()).collect::<Vec<_>>(),
-                )
-                .unwrap_or_default();
+                answer = letters
+                    .chars()
+                    .map(|c| c.to_string())
+                    .collect::<Vec<_>>()
+                    .join("#");
             }
         } else {
             answer = guess_letters(&content);
@@ -219,6 +222,68 @@ pub async fn ask(
         completion_tokens,
         total_tokens,
     })
+}
+
+/// 拉取供应商的可用模型列表（OpenAI 兼容的 `GET /models`）。
+/// 同时兼容 Ollama 的原生格式（`{"models":[{"name":...}]}`）。
+pub async fn fetch_models(
+    client: &reqwest::Client,
+    base_url: &str,
+    api_key: &str,
+) -> Result<Vec<String>, String> {
+    if base_url.trim().is_empty() {
+        return Err("base_url 不能为空".into());
+    }
+    let mut req = client.get(endpoint(base_url, "models"));
+    // Ollama 等本地服务不需要 Key
+    if !api_key.trim().is_empty() {
+        req = req.bearer_auth(api_key.trim());
+    }
+    let resp = req
+        .send()
+        .await
+        .map_err(|e| format!("无法连接：{}", describe(&e)))?;
+
+    let status = resp.status();
+    let text = resp
+        .text()
+        .await
+        .map_err(|e| format!("读取响应失败：{}", describe(&e)))?;
+    if !status.is_success() {
+        let brief: String = text.chars().take(200).collect();
+        return Err(format!("供应商返回 {}：{}", status.as_u16(), brief));
+    }
+
+    let value: Value =
+        serde_json::from_str(&text).map_err(|e| format!("响应不是合法 JSON：{}", e))?;
+
+    let mut models: Vec<String> = Vec::new();
+    if let Some(arr) = value.get("data").and_then(|v| v.as_array()) {
+        for item in arr {
+            if let Some(id) = item.get("id").and_then(|v| v.as_str()) {
+                models.push(id.to_string());
+            }
+        }
+    }
+    if models.is_empty() {
+        if let Some(arr) = value.get("models").and_then(|v| v.as_array()) {
+            for item in arr {
+                if let Some(name) = item
+                    .get("name")
+                    .or_else(|| item.get("id"))
+                    .and_then(|v| v.as_str())
+                {
+                    models.push(name.to_string());
+                }
+            }
+        }
+    }
+    models.sort();
+    models.dedup();
+    if models.is_empty() {
+        return Err("未获取到任何模型，请确认 base_url 与 API Key 是否正确".into());
+    }
+    Ok(models)
 }
 
 /// 测试供应商连通性

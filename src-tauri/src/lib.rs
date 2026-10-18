@@ -2,6 +2,8 @@ mod ai;
 mod commands;
 mod db;
 mod models;
+mod ocs;
+mod presets;
 mod search;
 mod server;
 mod state;
@@ -49,6 +51,9 @@ pub fn run() {
             commands::clear_records,
             commands::get_stats,
             commands::build_ocs_config,
+            commands::list_provider_presets,
+            commands::fetch_models,
+            commands::sync_provider_models,
             commands::test_search
         ])
         .run(tauri::generate_context!())

@@ -5,6 +5,7 @@ import type {
   Page,
   Provider,
   ProviderInput,
+  ProviderPreset,
   Question,
   QuestionInput,
   SearchOutcome,
@@ -12,6 +13,7 @@ import type {
   ServerStatus,
   Settings,
   Stats,
+  SyncModelsResult,
 } from "./types";
 
 /** Tauri 命令封装，前端只通过这里访问后端 */
@@ -25,9 +27,15 @@ export const api = {
 
   // 供应商
   listProviders: () => invoke<Provider[]>("list_providers"),
+  listProviderPresets: () => invoke<ProviderPreset[]>("list_provider_presets"),
   saveProvider: (input: ProviderInput) => invoke<number>("save_provider", { input }),
   deleteProvider: (id: number) => invoke<void>("delete_provider", { id }),
   testProvider: (id: number) => invoke<string>("test_provider", { id }),
+  /** 只试探，不入库 */
+  fetchModels: (baseUrl: string, apiKey: string) =>
+    invoke<string[]>("fetch_models", { baseUrl, apiKey }),
+  /** 拉取该供应商的模型并自动写入题库 */
+  syncProviderModels: (id: number) => invoke<SyncModelsResult>("sync_provider_models", { id }),
 
   // 模型
   listModels: () => invoke<AiModel[]>("list_models"),

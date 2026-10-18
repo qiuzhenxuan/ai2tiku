@@ -49,6 +49,110 @@ pub fn similarity(a: &str, b: &str) -> f64 {
     1.0 - prev[m] as f64 / n.max(m) as f64
 }
 
+/// 相似度 ≥ t 的必要条件：设查询串归一化长度为 n、库中题干为 m，
+/// 则 t·n ≤ m ≤ n/t。用它做候选预筛，不会漏掉任何真正达标的行。
+fn length_band(n: usize, t: f64) -> (i64, i64) {
+    if t <= 0.0 {
+        return (0, i64::MAX);
+    }
+    let lo = (t * n as f64).ceil() as i64;
+    let hi = (n as f64 / t).floor() as i64;
+    (lo.max(0), hi)
+}
+
+/// 去掉选项行首的编号（"A." / "A、xxx" / "(A) xxx" / "1. xxx" 等），返回正文。
+/// 行首不是编号（例如 "ABC 开头的正文"）时原样返回。
+fn strip_option_label(line: &str) -> &str {
+    let s = line.trim();
+    let body = s
+        .strip_prefix('(')
+        .or_else(|| s.strip_prefix('（'))
+        .unwrap_or(s);
+    let mut end = 0usize;
+    for (i, c) in body.char_indices() {
+        // 编号最多两个字符（A、1、10…），再往后就不是编号了
+        if c.is_ascii_alphanumeric() && i < 2 {
+            end = i + c.len_utf8();
+            continue;
+        }
+        break;
+    }
+    if end == 0 {
+        return s;
+    }
+    let rest = &body[end..];
+    let mut it = rest.chars();
+    match it.next() {
+        Some(c) if matches!(c, '.' | '、' | ')' | '）' | ',' | '，' | ':' | '：') => it.as_str().trim(),
+        Some(' ') | Some('\t') => rest.trim(),
+        _ => s,
+    }
+}
+
+/// 选项正文列表，按行顺序（已去编号、去标点空白、转小写）
+fn option_texts(options: &str) -> Vec<String> {
+    options
+        .lines()
+        .map(strip_option_label)
+        .map(normalize)
+        .filter(|s| !s.is_empty())
+        .collect()
+}
+
+/// 选项签名：与顺序无关，用于判断两次请求是不是「同一组选项」（乱序也算同一组）
+fn option_signature(options: &str) -> String {
+    let mut texts = option_texts(options);
+    texts.sort();
+    texts.join("\u{1}")
+}
+
+/// 答案是否只是「选项字母」形式（"A"、"A#C"）；填空题、判断题的文本答案返回 false
+fn is_letter_answer(answer: &str) -> bool {
+    let mut any = false;
+    for part in answer.split('#') {
+        let p = part.trim();
+        if p.is_empty() {
+            return false;
+        }
+        match p.chars().next() {
+            Some(c) if p.len() == 1 && c.is_ascii_alphabetic() => any = true,
+            _ => return false,
+        }
+    }
+    any
+}
+
+/// 把缓存里的字母答案换算成「当前这组选项」下的字母。
+/// 选项乱序时同一道题的字母会变（北京从 A 挪到 B），必须按选项正文重新定位；
+/// 选项内容/数量对不上则返回 None —— 表示这条缓存不能安全复用，宁可回退到 AI 也不能答错。
+fn remap_letter_answer(stored_options: &str, current_options: &str, answer: &str) -> Option<String> {
+    let stored = option_texts(stored_options);
+    let current = option_texts(current_options);
+    if stored.is_empty() || stored.len() != current.len() {
+        return None;
+    }
+    let mut out: Vec<String> = Vec::new();
+    for part in answer.split('#') {
+        let c = part.trim().chars().next()?;
+        if !c.is_ascii_alphabetic() {
+            return None;
+        }
+        let text = stored.get((c.to_ascii_uppercase() as u8 - b'A') as usize)?;
+        let idx = current.iter().position(|t| t == text)?;
+        out.push(((b'A' + idx as u8) as char).to_string());
+    }
+    Some(out.join("#"))
+}
+
+/// 一条缓存能否用于当前这组选项；可以则返回该直接使用的答案
+fn answer_for_options(q: &Question, current_options: &str) -> Option<String> {
+    if !is_letter_answer(&q.answer) {
+        // 填空题、判断题的答案是文本，与选项顺序无关
+        return Some(q.answer.clone());
+    }
+    remap_letter_answer(&q.options, current_options, &q.answer)
+}
+
 pub fn now() -> String {
     chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string()
 }
@@ -447,44 +551,93 @@ impl Db {
 
     const Q_COLS: &'static str = "id, title, options, qtype, answer, source, provider, model, hits, created_at, updated_at";
 
-    /// 本地题库匹配：先精确命中，再模糊匹配取最高相似度
-    pub fn find_local(&self, title: &str, threshold: f64) -> R<Option<(Question, f64)>> {
+    /// 本地题库匹配：先精确命中，再模糊匹配取最高相似度。
+    ///
+    /// 选项参与判定（这一步很关键）：
+    /// - 题干归一化后相同、但选项不同的题不算同一道题 —— 同一句「下列说法正确的是」
+    ///   可以出现在很多道不同的题里，只看题干必然答错；
+    /// - 命中时如果选项只是**顺序被换过**，答案里的字母按选项正文重新对新位置
+    ///   （北京从 A 挪到 B，缓存里的 "A" 要变成 "B"）；
+    /// - 选项内容对不上就放弃这条缓存，宁可回退 AI 也不能答错。
+    ///
+    /// 返回的 `Question.answer` 已经是「对应当前选项」的答案。
+    pub fn find_local(&self, title: &str, options: &str, threshold: f64) -> R<Option<(Question, f64)>> {
         let key = normalize(title);
         if key.is_empty() {
             return Ok(None);
         }
         let conn = self.lock()?;
-        let sql_exact = format!(
-            "SELECT {} FROM questions WHERE normalized_title = ?1 LIMIT 1",
+
+        // 1) 题干归一化后完全相同
+        let sql_same = format!(
+            "SELECT {} FROM questions WHERE normalized_title = ?1",
             Self::Q_COLS
         );
-        if let Some(q) = conn
-            .query_row(&sql_exact, params![key], |r| Self::row_to_question(r))
-            .optional()
-            .map_err(err)?
-        {
-            return Ok(Some((q, 1.0)));
+        let same = {
+            let mut stmt = conn.prepare(&sql_same).map_err(err)?;
+            let rows = stmt
+                .query_map(params![key], |r| Self::row_to_question(r))
+                .map_err(err)?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(err)?;
+            rows
+        };
+        for q in same {
+            if let Some(answer) = answer_for_options(&q, options) {
+                let mut hit = q;
+                hit.answer = answer;
+                return Ok(Some((hit, 1.0)));
+            }
         }
-        let sql_like = format!(
+
+        // 2) 模糊匹配：先按长度区间筛出「可能达到阈值」的候选（不漏真命中），再逐条算归一化编辑距离。
+        //
+        //    模糊这条通道只对**选择题**开放，且要求选项集合完全一致，原因是：
+        //    「人生目的是人生观的核心…」与「人生态度是人生观的核心…」只差两个字，
+        //    相似度 0.917 却是一对答案相反的题；判断题的选项永远是「对/错」，
+        //    给不了任何区分信号。只看题干去容错，必然答错，所以宁可 miss 交给 AI。
+        let query_sig = option_signature(options);
+        let n = key.chars().count();
+        let (lo, hi) = length_band(n, threshold);
+        let sql_near = format!(
             "SELECT {} FROM questions
-             WHERE normalized_title LIKE '%' || ?1 || '%' OR ?1 LIKE '%' || normalized_title || '%'
-             LIMIT 300",
+             WHERE length(normalized_title) BETWEEN ?1 AND ?2
+             ORDER BY abs(length(normalized_title) - ?3)
+             LIMIT 2000",
             Self::Q_COLS
         );
-        let mut stmt = conn.prepare(&sql_like).map_err(err)?;
-        let candidates = stmt
-            .query_map(params![key], |r| Self::row_to_question(r))
-            .map_err(err)?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(err)?;
-        Ok(candidates
-            .into_iter()
-            .map(|q| {
-                let s = similarity(&key, &normalize(&q.title));
-                (q, s)
-            })
-            .filter(|(_, s)| *s >= threshold)
-            .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal)))
+        let candidates = {
+            let mut stmt = conn.prepare(&sql_near).map_err(err)?;
+            let rows = stmt
+                .query_map(params![lo, hi, n as i64], |r| Self::row_to_question(r))
+                .map_err(err)?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(err)?;
+            rows
+        };
+
+        let mut best: Option<(Question, f64)> = None;
+        for q in candidates {
+            if !is_letter_answer(&q.answer) || query_sig.is_empty() {
+                continue;
+            }
+            if option_signature(&q.options) != query_sig {
+                continue;
+            }
+            let score = similarity(&key, &normalize(&q.title));
+            if score < threshold {
+                continue;
+            }
+            let Some(answer) = remap_letter_answer(&q.options, options, &q.answer) else {
+                continue;
+            };
+            if best.as_ref().map(|(_, b)| score > *b).unwrap_or(true) {
+                let mut hit = q;
+                hit.answer = answer;
+                best = Some((hit, score));
+            }
+        }
+        Ok(best)
     }
 
     pub fn list_questions(
@@ -571,19 +724,34 @@ impl Db {
     ) -> R<i64> {
         let conn = self.lock()?;
         let key = normalize(title);
-        let existing: Option<i64> = conn
-            .query_row(
-                "SELECT id FROM questions WHERE normalized_title = ?1 LIMIT 1",
-                params![key],
-                |r| r.get(0),
-            )
-            .optional()
-            .map_err(err)?;
+        // 去重键必须是「题干 + 选项」：题干相同但选项不同的其实是另一道题，
+        // 只按题干去重会把上一道题的答案覆盖掉（正是缓存答错的来源之一）。
+        let sig = option_signature(options);
+        let existing: Option<i64> = {
+            let mut stmt = conn
+                .prepare("SELECT id, options FROM questions WHERE normalized_title = ?1")
+                .map_err(err)?;
+            let rows = stmt
+                .query_map(params![key], |r| {
+                    Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?))
+                })
+                .map_err(err)?;
+            let mut found = None;
+            for row in rows {
+                let (id, opts) = row.map_err(err)?;
+                if option_signature(&opts) == sig {
+                    found = Some(id);
+                    break;
+                }
+            }
+            found
+        };
         match existing {
             Some(id) => {
+                // 选项一并写回：同一组选项只是顺序变了时，让库里存的顺序与答案字母保持一致
                 conn.execute(
-                    "UPDATE questions SET answer=?1, provider=?2, model=?3, updated_at=?4 WHERE id=?5",
-                    params![answer, provider, model, now(), id],
+                    "UPDATE questions SET options=?1, answer=?2, provider=?3, model=?4, updated_at=?5 WHERE id=?6",
+                    params![options, answer, provider, model, now(), id],
                 )
                 .map_err(err)?;
                 Ok(id)
@@ -807,5 +975,122 @@ impl Db {
             trend,
             model_usage,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn temp_db(name: &str) -> Db {
+        let path = std::env::temp_dir().join(format!("ai2tiku-test-{}.db", name));
+        let _ = std::fs::remove_file(&path);
+        Db::open(&path).expect("建库失败")
+    }
+
+    fn manual(db: &Db, title: &str, options: &str, answer: &str) {
+        db.save_question(&QuestionInput {
+            id: None,
+            title: title.into(),
+            options: Some(options.into()),
+            qtype: Some("single".into()),
+            answer: answer.into(),
+        })
+        .expect("写入失败");
+    }
+
+    fn cached(db: &Db, title: &str, options: &str, answer: &str) {
+        db.cache_question(title, options, "single", answer, "t", "t")
+            .expect("写入失败");
+    }
+
+    const OPT_A: &str = "A. 甲\nB. 乙\nC. 丙\nD. 丁";
+    const OPT_B: &str = "A. 苹果\nB. 香蕉\nC. 橘子\nD. 葡萄";
+
+    /// 同一句题干配不同选项的两道题，缓存不应互相覆盖、也不应错答
+    #[test]
+    fn same_stem_should_not_reuse_other_options_answer() {
+        let db = temp_db("stem");
+        manual(&db, "下列说法正确的是", OPT_A, "A");
+        cached(&db, "下列说法正确的是", OPT_B, "C");
+        let rows = db.list_questions(None, None, 1, 10).unwrap().items;
+        for r in &rows {
+            println!("库中 → options={:?} answer={:?}", r.options, r.answer);
+        }
+        assert_eq!(rows.len(), 2, "两道不同的题应当各占一行，不能被合并");
+        let hit = db.find_local("下列说法正确的是", OPT_A, 0.85).unwrap();
+        let got = hit.as_ref().map(|(q, _)| q.answer.clone());
+        println!("按 OPT_A 的选项查询 → 命中答案 {:?}（应为 A）", got);
+        assert_eq!(got.as_deref(), Some("A"));
+    }
+
+    /// 选项乱序：字母答案要按选项正文重新定位
+    #[test]
+    fn shuffled_options_should_remap_letters() {
+        let db = temp_db("shuffle");
+        let stored = "A. 甲\nB. 乙\nC. 丙\nD. 丁";
+        let current = "A. 丙\nB. 甲\nC. 丁\nD. 乙";
+        manual(&db, "下面说法正确的有", stored, "A#C");
+        let hit = db.find_local("下面说法正确的有", current, 0.85).unwrap();
+        let got = hit.map(|(q, _)| q.answer);
+        println!("乱序后 → {:?}（甲挪到 B、丙挪到 A，应为 B#A）", got);
+        assert_eq!(got.as_deref(), Some("B#A"));
+    }
+
+    /// 选项内容对不上：宁可不命中，也不能把字母答案原样答出去
+    #[test]
+    fn different_options_should_not_hit() {
+        let db = temp_db("diff");
+        manual(&db, "下列说法正确的是", "A. 甲\nB. 乙", "A");
+        let hit = db.find_local("下列说法正确的是", "A. 苹果\nB. 香蕉", 0.85).unwrap();
+        println!("选项完全不同 → {:?}（应为 None）", hit.as_ref().map(|(q, _)| q.answer.clone()));
+        assert!(hit.is_none());
+    }
+
+    /// 选择题：题干只差一点点、选项集合一致时，模糊匹配应该命中
+    #[test]
+    fn fuzzy_should_match_choice_with_same_options() {
+        let db = temp_db("fuzzy-choice");
+        let options = "个体对自己生命存在的肯定\n个人的社会存在\n个人通过劳动和创造,对社会所作的贡献\n社会对个人的尊重和满足";
+        manual(&db, "下列关于社会价值正确的说法是", options, "C");
+        let hit = db
+            .find_local("下列关于社会价值正确的说法为", options, 0.85)
+            .unwrap();
+        println!("近义题干 + 同选项 → {:?}", hit.as_ref().map(|(q, s)| (q.answer.clone(), *s)));
+        assert_eq!(hit.map(|(q, _)| q.answer).as_deref(), Some("C"));
+    }
+
+    /// 判断题近邻：只差两个字的题干相似度能到 0.9，但答案是相反的，绝不能被模糊匹配吃掉
+    #[test]
+    fn near_neighbour_judgement_must_not_cross_match() {
+        let db = temp_db("near");
+        manual(&db, "人生目的是人生观的核心,在人生实践中具有重要的作用。", "对\n错", "对");
+        manual(&db, "人生态度是人生观的核心,在人生实践中具有重要的作用。", "对\n错", "错");
+
+        let exact = db
+            .find_local("人生态度是人生观的核心,在人生实践中具有重要的作用。", "对\n错", 0.85)
+            .unwrap();
+        assert_eq!(exact.map(|(q, _)| q.answer).as_deref(), Some("错"), "逐字命中应取到本题答案");
+
+        let near = db
+            .find_local("人生态度是人生观的核心,在人生实践中具有非常重要的作用。", "对\n错", 0.85)
+            .unwrap();
+        println!("近邻题干 → {:?}（应为 None，交给 AI）", near.as_ref().map(|(q, _)| q.answer.clone()));
+        assert!(near.is_none());
+    }
+
+    /// 判断题/填空题只有题干一个信号，模糊匹配一律不做（宁可 miss 交给 AI）
+    #[test]
+    fn text_answer_without_options_should_not_fuzzy_match() {
+        let db = temp_db("fuzzy-text");
+        let stored = "网络协议的三要素是语法、语义和时序";
+        let query = "网络协议的三要素是语法、语义和顺序";
+        manual(&db, stored, "", "对");
+        let score = similarity(&normalize(query), &normalize(stored));
+        println!("相似度 = {:.3} ≥ 阈值 0.85，但答案是文本、没有选项可交叉验证", score);
+        assert!(score >= 0.85);
+        let hit = db.find_local(query, "", 0.85).unwrap();
+        println!("查询 → {:?}（应为 None）", hit.as_ref().map(|(q, _)| q.answer.clone()));
+        assert!(hit.is_none());
     }
 }

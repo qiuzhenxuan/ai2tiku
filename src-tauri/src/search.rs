@@ -21,7 +21,10 @@ pub async fn answer(state: &AppState, q: &SearchQuery) -> SearchOutcome {
     // 图片题的题干文本只剩 [图片N] 占位，题目信息全在图片里，
     // 按文本命中缓存会把另一道题（甚至另一张图）的答案答出去，所以有图片时跳过文本匹配。
     if images.is_empty() {
-        match state.db.find_local(title, settings.match_threshold) {
+        match state
+            .db
+            .find_local(title, options, settings.match_threshold)
+        {
             Ok(Some((hit, score))) => {
                 let _ = state.db.bump_hits(hit.id);
                 let _ =

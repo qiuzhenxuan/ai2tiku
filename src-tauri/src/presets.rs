@@ -23,7 +23,7 @@ pub const PRESETS: &[ProviderPreset] = &[
         id: "zhipu",
         name: "智谱 AI (GLM)",
         base_url: "https://open.bigmodel.cn/api/paas/v4",
-        homepage: "https://open.bigmodel.cn",
+        homepage: "https://www.bigmodel.cn/invite?icode=sgWVI0vRXdaQMNjdvoiGd0jPr3uHog9F4g5tjuOUqno%3D",
         note: "国内直连，GLM 系列性价比高",
         models: &["glm-4-flash", "glm-4-air", "glm-4-plus"],
     },

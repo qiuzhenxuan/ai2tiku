@@ -38,6 +38,16 @@ OCS 脚本通过标准的「题库配置」调用它。**先用本地题库匹�
 | 前端 | Vue 3 + TypeScript + Vite + vue-router |
 | 样式 | 原生 CSS + CSS 变量驱动的日夜双主题 |
 
+## 下载
+
+不想自己编译的话，去 [Releases](https://github.com/qiuzhenxuan/ai2tiku/releases) 下载
+`ai2tiku.exe`（单文件，前端资源已打包进去），双击即可运行，无需安装。
+
+- 需要 Windows 10/11；Win11 与大部分 Win10 已自带 WebView2 运行时，系统较旧时需先装
+  [WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)
+- exe 未做代码签名，首次运行 Windows 可能提示"未知发布者"，点"仍要运行"即可
+- 每次运行会自动在 `%APPDATA%\com.ai2tiku.app` 下建库，你的 API Key 只存在本机
+
 ## 运行
 
 前置要求：Node 18+、pnpm、Rust stable 工具链，Windows 上还需要 MSVC 生成工具。

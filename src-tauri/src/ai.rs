@@ -36,7 +36,22 @@ pub fn build_client() -> reqwest::Client {
 }
 
 fn endpoint(base_url: &str, path: &str) -> String {
-    format!("{}/{}", base_url.trim_end_matches('/'), path.trim_start_matches('/'))
+    // 用户从网页复制 base_url 时很容易带上空格或换行，这里统一清掉
+    let base = base_url.trim().trim_end_matches('/');
+    format!("{}/{}", base, path.trim_start_matches('/'))
+}
+
+/// 把 reqwest 错误的整条原因链拼出来。
+/// reqwest::Error 的 Display 只有最外层那句话（例如 error sending request for url (...)),
+/// 真正的根因（dns / 连接被拒 / 超时 / 证书 / 连接被重置）藏在 source 里。
+fn describe(e: &reqwest::Error) -> String {
+    let mut parts = vec![e.to_string()];
+    let mut source = std::error::Error::source(e);
+    while let Some(s) = source {
+        parts.push(s.to_string());
+        source = s.source();
+    }
+    parts.join(" → ")
 }
 
 /// 去掉 Markdown 代码块围栏，尽力从回复中取出 JSON 对象
@@ -140,13 +155,13 @@ pub async fn ask(
         .json(&body)
         .send()
         .await
-        .map_err(|e| format!("请求 AI 失败：{}", e))?;
+        .map_err(|e| format!("请求 AI 失败：{}", describe(&e)))?;
 
     let status = resp.status();
     let text = resp
         .text()
         .await
-        .map_err(|e| format!("读取 AI 响应失败：{}", e))?;
+        .map_err(|e| format!("读取 AI 响应失败：{}", describe(&e)))?;
 
     if !status.is_success() {
         let brief: String = text.chars().take(300).collect();
@@ -213,7 +228,7 @@ pub async fn test_provider(client: &reqwest::Client, provider: &Provider) -> Res
         .bearer_auth(&provider.api_key)
         .send()
         .await
-        .map_err(|e| format!("无法连接：{}", e))?;
+        .map_err(|e| format!("无法连接：{}", describe(&e)))?;
 
     if resp.status().is_success() {
         let text = resp.text().await.unwrap_or_default();

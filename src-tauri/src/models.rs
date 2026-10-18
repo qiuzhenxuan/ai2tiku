@@ -112,6 +112,9 @@ pub struct Settings {
     pub auto_cache: bool,
     pub ai_fallback: bool,
     pub system_prompt: String,
+    /// 网络代理。留空 = 强制直连（不走系统代理）；填写则所有 AI 请求走该代理，
+    /// 例如 `http://127.0.0.1:7890`。访问 OpenAI 等被墙服务时才需要。
+    pub proxy_url: String,
 }
 
 impl Default for Settings {
@@ -122,6 +125,7 @@ impl Default for Settings {
             auto_cache: true,
             ai_fallback: true,
             system_prompt: String::new(),
+            proxy_url: String::new(),
         }
     }
 }
@@ -189,6 +193,15 @@ pub struct SearchQuery {
     pub question: String,
     #[serde(default)]
     pub options: String,
+    /// 图片题优化：图片的 base64 data URL 数组（对应题干/选项里的 [图片N]）
+    #[serde(default)]
+    pub images: Vec<String>,
+    /// 图片题优化：题干中的图片 URL 被替换为 [图片N] 后的文本
+    #[serde(default)]
+    pub suggestion_title: String,
+    /// 图片题优化：选项中的图片 URL 被替换为 [图片N] 后的文本
+    #[serde(default)]
+    pub suggestion_options: String,
 }
 
 impl SearchQuery {
@@ -198,6 +211,25 @@ impl SearchQuery {
             &self.title
         } else {
             &self.question
+        }
+    }
+
+    /// 实际拿来提问的题干：图片题时 title 里是原始图片 URL（一大串噪声），
+    /// 用 suggestion_title（[图片N] 占位）更干净，图片本身另走 images 字段。
+    pub fn ask_title(&self) -> &str {
+        if self.suggestion_title.is_empty() {
+            self.title()
+        } else {
+            &self.suggestion_title
+        }
+    }
+
+    /// 实际拿来提问的选项，规则同上
+    pub fn ask_options(&self) -> &str {
+        if self.suggestion_options.is_empty() {
+            &self.options
+        } else {
+            &self.suggestion_options
         }
     }
 }

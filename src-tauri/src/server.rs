@@ -2,7 +2,7 @@ use crate::models::{SearchQuery, ServerStatus};
 use crate::state::SharedState;
 use axum::{
     body::Bytes,
-    extract::{Query, State},
+    extract::{DefaultBodyLimit, Query, State},
     routing::get,
     Json, Router,
 };
@@ -25,6 +25,8 @@ pub fn router(state: SharedState) -> Router {
         .route("/api/status", get(status_handler))
         .route("/api/search", get(search_get).post(search_post))
         .route("/ocs", get(ocs_config))
+        // 图片题的 base64 图片随请求体提交，axum 默认 2MB 上限会被撑爆，这里放宽到 32MB
+        .layer(DefaultBodyLimit::max(32 * 1024 * 1024))
         .layer(CorsLayer::permissive())
         .with_state(state)
 }
@@ -49,14 +51,16 @@ async fn search_get(
     State(state): State<SharedState>,
     Query(q): Query<SearchQuery>,
 ) -> Json<Value> {
-    let outcome = crate::search::answer(&state, q.title(), &q.qtype, &q.options).await;
+    let outcome = crate::search::answer(&state, &q).await;
     Json(to_ocs_payload(&outcome))
 }
 
-/// POST /api/search  body: {"title":"...","type":"single","options":"A. xx\nB. yy"}
+/// POST /api/search
+/// body: {"title":"...","type":"single","options":"A. xx\nB. yy"}
+/// 图片题时另带 images（base64 数组）/ suggestion_title / suggestion_options
 async fn search_post(State(state): State<SharedState>, body: Bytes) -> Json<Value> {
     let q: SearchQuery = serde_json::from_slice(&body).unwrap_or_default();
-    let outcome = crate::search::answer(&state, q.title(), &q.qtype, &q.options).await;
+    let outcome = crate::search::answer(&state, &q).await;
     Json(to_ocs_payload(&outcome))
 }
 

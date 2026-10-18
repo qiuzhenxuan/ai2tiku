@@ -3,9 +3,11 @@ use crate::state::AppState;
 use std::time::Instant;
 
 /// 核心答题流程：本地题库优先，未命中再走 AI，并把结果写回缓存
-pub async fn answer(state: &AppState, title: &str, qtype: &str, options: &str) -> SearchOutcome {
+pub async fn answer(state: &AppState, q: &SearchQuery) -> SearchOutcome {
     let started = Instant::now();
-    let title = title.trim();
+    let images = &q.images;
+    let title = q.ask_title().trim();
+    let options = q.ask_options();
     if title.is_empty() {
         return fail("题目为空，无法搜索", started);
     }
@@ -16,29 +18,35 @@ pub async fn answer(state: &AppState, title: &str, qtype: &str, options: &str) -
     };
 
     // 1. 本地题库匹配
-    match state.db.find_local(title, settings.match_threshold) {
-        Ok(Some((q, score))) => {
-            let _ = state.db.bump_hits(q.id);
-            let _ = state.db.add_record(title, &q.answer, "cache", "", "", 0, 0, elapsed(started));
-            return SearchOutcome {
-                code: 1,
-                question: Some(q.title),
-                answer: Some(q.answer),
-                source: "cache".into(),
-                similarity: (score * 1000.0).round() / 1000.0,
-                explanation: None,
-                model: if q.model.is_empty() {
-                    "本地题库".into()
-                } else {
-                    q.model
-                },
-                tokens: 0,
-                duration_ms: elapsed(started),
-                msg: None,
-            };
+    // 图片题的题干文本只剩 [图片N] 占位，题目信息全在图片里，
+    // 按文本命中缓存会把另一道题（甚至另一张图）的答案答出去，所以有图片时跳过文本匹配。
+    if images.is_empty() {
+        match state.db.find_local(title, settings.match_threshold) {
+            Ok(Some((hit, score))) => {
+                let _ = state.db.bump_hits(hit.id);
+                let _ =
+                    state.db
+                        .add_record(title, &hit.answer, "cache", "", "", 0, 0, elapsed(started));
+                return SearchOutcome {
+                    code: 1,
+                    question: Some(hit.title),
+                    answer: Some(hit.answer),
+                    source: "cache".into(),
+                    similarity: (score * 1000.0).round() / 1000.0,
+                    explanation: None,
+                    model: if hit.model.is_empty() {
+                        "本地题库".into()
+                    } else {
+                        hit.model
+                    },
+                    tokens: 0,
+                    duration_ms: elapsed(started),
+                    msg: None,
+                };
+            }
+            Ok(None) => {}
+            Err(e) => return fail(&format!("查询本地题库失败：{}", e), started),
         }
-        Ok(None) => {}
-        Err(e) => return fail(&format!("查询本地题库失败：{}", e), started),
     }
 
     // 2. AI 兜底
@@ -53,13 +61,14 @@ pub async fn answer(state: &AppState, title: &str, qtype: &str, options: &str) -
     let (provider, model) = active;
 
     match crate::ai::ask(
-        &state.client,
+        &state.client(),
         &provider,
         &model,
-        qtype,
+        &q.qtype,
         title,
         options,
         &settings.system_prompt,
+        images,
     )
     .await
     {
@@ -88,11 +97,16 @@ pub async fn answer(state: &AppState, title: &str, qtype: &str, options: &str) -
                     msg: Some("AI 未能确定答案".into()),
                 };
             }
-            if settings.auto_cache {
+            // 图片题不入库：题干文本不含题目信息，存进去以后只会误命中
+            if settings.auto_cache && images.is_empty() {
                 let _ = state.db.cache_question(
                     title,
                     options,
-                    if qtype.is_empty() { "unknown" } else { qtype },
+                    if q.qtype.is_empty() {
+                        "unknown"
+                    } else {
+                        q.qtype.as_str()
+                    },
                     &res.answer,
                     &provider.name,
                     &model.model,

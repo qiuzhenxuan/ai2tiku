@@ -13,6 +13,7 @@ const form = reactive({
   autoCache: true,
   aiFallback: true,
   systemPrompt: "",
+  proxyUrl: "",
 });
 
 const status = ref<ServerStatus | null>(null);
@@ -86,6 +87,38 @@ onMounted(load);
             {{ status?.running ? "停止服务" : "启动服务" }}
           </button>
           <span class="mono faint small">{{ status?.address }}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card__head">
+        <AppIcon name="globe" :size="15" />
+        <span class="card__title">网络代理</span>
+        <span class="card__hint">留空 = 强制直连</span>
+      </div>
+      <div class="card__body stack">
+        <div class="field" style="max-width: 420px">
+          <label class="field__label" for="s-proxy">代理地址</label>
+          <input id="s-proxy" v-model="form.proxyUrl" class="input" placeholder="http://127.0.0.1:7890" />
+          <span class="field__help">
+            留空则**强制直连**，不使用系统代理。国内模型（智谱 / DeepSeek / 通义等）可直接访问，
+            建议留空；只有访问 OpenAI 这类被墙服务时才需要填写你的代理地址。
+          </span>
+        </div>
+        <div class="callout callout--warn">
+          <AppIcon name="info" :size="16" />
+          <div>
+            留空的必要性：reqwest 默认会读取 Windows 系统代理。若本机开着代理软件（Clash 等）
+            而它没有正常服务，所有 AI 请求都会失败在
+            <code class="mono">tunnel error → os error 10061</code>。
+          </div>
+        </div>
+        <div class="row">
+          <button class="btn btn--primary" type="button" :disabled="saving" @click="save">
+            <AppIcon name="check" :size="14" />
+            保存设置
+          </button>
         </div>
       </div>
     </div>

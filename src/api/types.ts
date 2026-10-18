@@ -88,6 +88,8 @@ export interface Settings {
   autoCache: boolean;
   aiFallback: boolean;
   systemPrompt: string;
+  /** 网络代理；留空 = 强制直连（不走系统代理） */
+  proxyUrl: string;
 }
 
 export interface ServerStatus {

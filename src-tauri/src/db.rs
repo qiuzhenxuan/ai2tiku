@@ -164,6 +164,7 @@ impl Db {
                 .map(|v| v != "0")
                 .unwrap_or(d.ai_fallback),
             system_prompt: get("system_prompt").unwrap_or(d.system_prompt),
+            proxy_url: get("proxy_url").unwrap_or(d.proxy_url),
         })
     }
 
@@ -175,6 +176,7 @@ impl Db {
             ("auto_cache", if s.auto_cache { "1" } else { "0" }.to_string()),
             ("ai_fallback", if s.ai_fallback { "1" } else { "0" }.to_string()),
             ("system_prompt", s.system_prompt.clone()),
+            ("proxy_url", s.proxy_url.clone()),
         ];
         for (k, v) in pairs {
             conn.execute(

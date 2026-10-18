@@ -27,12 +27,29 @@ pub fn type_label(qtype: &str) -> String {
         .unwrap_or_else(|| "未知题型".to_string())
 }
 
-pub fn build_client() -> reqwest::Client {
-    reqwest::Client::builder()
+/// 构造 HTTP 客户端。
+///
+/// `proxy_url` 为空时**强制直连**（`no_proxy`）：reqwest 默认会读取系统代理，
+/// 而国内常见的代理软件（Clash 等）会把 Windows 系统代理指向自己的端口；
+/// 一旦该端口没有服务，所有请求都会失败在 `tunnel error → os error 10061`。
+/// 国内模型（智谱/DeepSeek/通义等）本来就能直连，所以默认不走代理更稳。
+/// 需要访问 OpenAI 等被墙服务时，在「设置」里填代理地址即可。
+pub fn build_client(proxy_url: &str) -> reqwest::Client {
+    let proxy = proxy_url.trim();
+    let builder = reqwest::Client::builder()
         .timeout(Duration::from_secs(120))
-        .connect_timeout(Duration::from_secs(15))
-        .build()
-        .unwrap_or_default()
+        .connect_timeout(Duration::from_secs(15));
+
+    let builder = if proxy.is_empty() {
+        builder.no_proxy()
+    } else {
+        match reqwest::Proxy::all(proxy) {
+            Ok(p) => builder.proxy(p),
+            Err(_) => builder.no_proxy(),
+        }
+    };
+
+    builder.build().unwrap_or_default()
 }
 
 fn endpoint(base_url: &str, path: &str) -> String {
@@ -126,6 +143,9 @@ pub async fn ask(
     title: &str,
     options: &str,
     system_override: &str,
+    // 图片题优化带来的图片（data:image/png;base64,... 形式）；
+    // 非空时按 OpenAI 多模态格式提交，需选用支持视觉的模型
+    images: &[String],
 ) -> Result<AiAnswer, String> {
     if provider.base_url.trim().is_empty() {
         return Err("供应商未配置 base_url".into());
@@ -141,13 +161,29 @@ pub async fn ask(
         user.push_str(&format!("\n选项：\n{}", options.trim()));
     }
 
+    // 图片题：题干里的图片 URL 已被 OCS 换成 [图片N] 占位符，图片本体随 images 一起传来。
+    // 这里按 OpenAI 的多模态格式（content 为数组）提交，并要求按图片内容作答。
+    let content = if images.is_empty() {
+        json!(user)
+    } else {
+        user.push_str(&format!(
+            "\n本题含 {} 张图片（按 [图片N] 顺序对应），请结合图片内容作答。",
+            images.len()
+        ));
+        let mut parts = vec![json!({ "type": "text", "text": user })];
+        for img in images {
+            parts.push(json!({ "type": "image_url", "image_url": { "url": img } }));
+        }
+        Value::Array(parts)
+    };
+
     let body = json!({
         "model": model.model,
         "temperature": model.temperature,
         "max_tokens": model.max_tokens,
         "messages": [
             { "role": "system", "content": system },
-            { "role": "user", "content": user }
+            { "role": "user", "content": content }
         ]
     });
 
@@ -167,7 +203,16 @@ pub async fn ask(
 
     if !status.is_success() {
         let brief: String = text.chars().take(300).collect();
-        return Err(format!("AI 返回 {}：{}", status.as_u16(), brief));
+        let mut msg = format!("AI 返回 {}：{}", status.as_u16(), brief);
+        // 图片题的常见失败：模型不支持图片输入，供应商往往只回一句
+        // 「messages.content.type 参数非法」之类的提示，看不出是模型选错了
+        if !images.is_empty() {
+            let lower = text.to_lowercase();
+            if lower.contains("content.type") || lower.contains("image") || lower.contains("vision") {
+                msg.push_str("；当前模型可能不支持图片输入，请在「AI 供应商」里改用支持视觉的模型（如 glm-4.5v、qwen-vl-max）");
+            }
+        }
+        return Err(msg);
     }
 
     let value: Value = serde_json::from_str(&text).map_err(|e| {

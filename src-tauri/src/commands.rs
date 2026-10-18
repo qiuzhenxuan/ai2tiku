@@ -16,6 +16,10 @@ pub fn get_settings(state: State<'_, SharedState>) -> R<Settings> {
 pub fn save_settings(state: State<'_, SharedState>, settings: Settings) -> R<Settings> {
     let before = state.db.settings()?;
     state.db.save_settings(&settings)?;
+    // 代理变更后需要重建 HTTP 客户端才能生效
+    if before.proxy_url != settings.proxy_url {
+        state.inner().rebuild_client(&settings.proxy_url);
+    }
     if before.port != settings.port {
         let running = crate::server::status(state.inner()).running;
         if running {
@@ -73,7 +77,8 @@ pub async fn test_provider(state: State<'_, SharedState>, id: i64) -> R<String> 
         .into_iter()
         .find(|p| p.id == id)
         .ok_or_else(|| "供应商不存在".to_string())?;
-    crate::ai::test_provider(&state.client, &provider).await
+    let client = state.client();
+    crate::ai::test_provider(&client, &provider).await
 }
 
 // ---------- 模型 ----------
@@ -171,7 +176,8 @@ pub async fn fetch_models(
     base_url: String,
     api_key: String,
 ) -> R<Vec<String>> {
-    crate::ai::fetch_models(&state.client, &base_url, &api_key).await
+    let client = state.client();
+    crate::ai::fetch_models(&client, &base_url, &api_key).await
 }
 
 /// 拉取某供应商的模型并自动入库；新库第一次会顺便设好默认模型
@@ -186,8 +192,8 @@ pub async fn sync_provider_models(
         .into_iter()
         .find(|p| p.id == id)
         .ok_or_else(|| "供应商不存在".to_string())?;
-    let models =
-        crate::ai::fetch_models(&state.client, &provider.base_url, &provider.api_key).await?;
+    let client = state.client();
+    let models = crate::ai::fetch_models(&client, &provider.base_url, &provider.api_key).await?;
     let added = state.db.upsert_models(id, &models)?;
     Ok(SyncModelsResult {
         provider: provider.name,
@@ -205,12 +211,11 @@ pub async fn test_search(
     qtype: Option<String>,
     options: Option<String>,
 ) -> R<SearchOutcome> {
-    let outcome = crate::search::answer(
-        state.inner(),
-        &title,
-        qtype.as_deref().unwrap_or("single"),
-        options.as_deref().unwrap_or(""),
-    )
-    .await;
-    Ok(outcome)
+    let query = SearchQuery {
+        title,
+        qtype: qtype.unwrap_or_else(|| "single".into()),
+        options: options.unwrap_or_default(),
+        ..Default::default()
+    };
+    Ok(crate::search::answer(state.inner(), &query).await)
 }

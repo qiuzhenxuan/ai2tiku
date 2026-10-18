@@ -14,11 +14,14 @@ OCS 脚本通过标准的「题库配置」调用它。**先用本地题库匹�
 - **内置常用供应商预设** —— 智谱 / DeepSeek / 通义千问 / Kimi / 混元 / 火山方舟 / 星火 / 千帆 / MiniMax / OpenAI / Ollama，选中后**只需填 API Key**
 - **保存供应商自动获取可用模型** —— 自动请求 `/models` 拉取该厂商的模型并填入，无需手抄模型名
 - **OCS 题库配置一键生成** —— 支持「订阅链接」与「JSON 字符串」两种填法
+- **支持 OCS 5.0 图片题优化** —— 题库配置声明了 `${images}` 等参数，题干/选项里的图片
+  会以 base64 传给模型（图片题需改用支持视觉的模型，如 glm-4.5v、qwen-vl-max）
 - **AI 供应商与模型自定义** —— 任何 OpenAI 兼容服务，可增删模型、设默认、测连通性
 - **本地题库管理与缓存** —— AI 答过的题自动入库，支持增删改查
 - **答题记录** —— 每次搜题的来源、模型、耗时、Token 全部留痕
 - **统计看板** —— 缓存命中率、Token 消耗趋势、按模型用量分布
 - **日夜双主题** —— 浅色 / 深色两套配色，跟随系统或手动切换
+- **默认强制直连** —— 不受本机代理软件的系统代理影响；需要访问 OpenAI 等被墙服务时可在「设置」里单独填代理
 
 ## 截图
 
@@ -71,17 +74,27 @@ pnpm dev
     "url": "http://127.0.0.1:3100/api/search",
     "method": "post",
     "contentType": "json",
+    "responseType": "json",
     "type": "GM_xmlhttpRequest",
     "headers": { "Content-Type": "application/json" },
     "data": {
       "title": "${title}",
       "type": "${type}",
-      "options": "${options}"
+      "options": "${options}",
+      "images": { "handler": "return (env) => env.images" },
+      "suggestion_title": "${suggestion_title}",
+      "suggestion_options": "${suggestion_options}"
     },
     "handler": "return (res)=> res.code === 1 ? [res.question, res.answer] : [res.msg, undefined]"
   }
 ]
 ```
+
+> `contentType` 是 OCS 5.0 之前的旧字段（此后由 `responseType` 取代），两个都写以兼容新旧版本。
+> `data` 里对 `${images}` / `${suggestion_title}` / `${suggestion_options}` 的引用是 OCS
+> 判定「题库支持图片题优化」的依据（`isAnswererWrapperSupportImageOptimize`），
+> 且该判定只认 `method: "post"`。其中 `images` 是 base64 数组，用字段解析器 `{ handler }`
+> 返回可保留数组结构（字符串占位符会被拼成一整条字符串）。
 
 > **注意**：OCS 请求本机地址需要在脚本头部 `@connect` 中放行域名。
 > 请把脚本管理器的 `@connect 模式` 设为宽松模式，或使用官方「全域名通用版本」脚本。
@@ -93,6 +106,7 @@ pnpm dev
 ```
 GET  /api/search?title=...&type=...&options=...
 POST /api/search   {"title":"...","type":"single","options":"A. xx\nB. yy"}
+                   # 图片题另带 images（base64 数组）/ suggestion_title / suggestion_options
 GET  /api/status
 GET  /ocs          # OCS 订阅链接：返回题库配置 JSON
 ```

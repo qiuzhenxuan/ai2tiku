@@ -1093,4 +1093,39 @@ mod tests {
         println!("查询 → {:?}（应为 None）", hit.as_ref().map(|(q, _)| q.answer.clone()));
         assert!(hit.is_none());
     }
+
+    /// 反方向验证：真正的同一道题重复缓存时必须原地更新，不能每答一次多一行
+    #[test]
+    fn caching_same_question_twice_should_update_in_place() {
+        let db = temp_db("dedupe");
+        let options = "A. 甲\nB. 乙\nC. 丙";
+        let first = db.cache_question("下列说法", options, "single", "A", "t", "t").unwrap();
+        let second = db.cache_question("下列说法", options, "single", "B", "t", "t").unwrap();
+        let n = db.list_questions(None, None, 1, 10).unwrap().items.len();
+        println!("同题同选项缓存两次 → 行数={}，id={}/{}", n, first, second);
+        assert_eq!(n, 1, "同题同选项不应产生重复行");
+        assert_eq!(first, second, "应更新原来那一行");
+        let hit = db.find_local("下列说法", options, 0.85).unwrap().unwrap().0;
+        assert_eq!(hit.answer, "B", "答案应被更新");
+    }
+
+    /// 同一组选项只是顺序变了：仍然算同一道题，且库里存的选项顺序要与答案字母保持一致
+    #[test]
+    fn shuffled_same_options_should_dedupe_and_keep_order_consistent() {
+        let db = temp_db("dedupe-shuffle");
+        let a = "A. 甲\nB. 乙\nC. 丙";
+        let b = "A. 丙\nB. 甲\nC. 乙";
+        let first = db.cache_question("下列说法", a, "single", "B", "t", "t").unwrap();
+        let second = db.cache_question("下列说法", b, "single", "A", "t", "t").unwrap();
+        println!("选项乱序后再缓存 → 行数={}", db.list_questions(None, None, 1, 10).unwrap().items.len());
+        assert_eq!(first, second, "同一组选项只是顺序变了，应仍是同一行");
+        assert_eq!(db.list_questions(None, None, 1, 10).unwrap().items.len(), 1);
+
+        let same = db.find_local("下列说法", b, 0.85).unwrap().unwrap().0;
+        assert_eq!(same.answer, "A");
+        // 换回最早那个顺序查询：丙 从 A 位挪到了 C 位，字母应跟着走
+        let back = db.find_local("下列说法", a, 0.85).unwrap().unwrap().0;
+        println!("换回原选项顺序 → {}（丙 在 C 位，应为 C）", back.answer);
+        assert_eq!(back.answer, "C");
+    }
 }

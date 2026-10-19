@@ -97,7 +97,12 @@ pub async fn answer(state: &AppState, q: &SearchQuery) -> SearchOutcome {
                     model: model.model.clone(),
                     tokens: res.total_tokens,
                     duration_ms: elapsed(started),
-                    msg: Some("AI 未能确定答案".into()),
+                    // 空答案时 explanation 里放的是失败原因（被截断 / 重试失败），原样提示用户
+                    msg: Some(if res.explanation.is_empty() {
+                        "AI 未能确定答案".to_string()
+                    } else {
+                        res.explanation.clone()
+                    }),
                 };
             }
             // 图片题不入库：题干文本不含题目信息，存进去以后只会误命中

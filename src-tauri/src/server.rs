@@ -59,7 +59,18 @@ async fn search_get(
 /// body: {"title":"...","type":"single","options":"A. xx\nB. yy"}
 /// 图片题时另带 images（base64 数组）/ suggestion_title / suggestion_options
 async fn search_post(State(state): State<SharedState>, body: Bytes) -> Json<Value> {
-    let q: SearchQuery = serde_json::from_slice(&body).unwrap_or_default();
+    // 解析失败时要说清楚，不能静默当成「空题目」——那样只会白白丢一道题
+    let q: SearchQuery = match serde_json::from_slice(&body) {
+        Ok(q) => q,
+        Err(e) => {
+            return Json(json!({
+                "code": 0,
+                "source": "none",
+                "durationMs": 0,
+                "msg": format!("请求体解析失败：{}", e),
+            }))
+        }
+    };
     let outcome = crate::search::answer(&state, &q).await;
     Json(to_ocs_payload(&outcome))
 }

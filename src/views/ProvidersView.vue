@@ -39,7 +39,7 @@ const modelForm = reactive<ModelInput>({
   model: "",
   displayName: "",
   temperature: 0.3,
-  maxTokens: 1024,
+  maxTokens: 2048,
   enabled: true,
   isDefault: false,
 });
@@ -148,7 +148,7 @@ function openModel(item?: AiModel) {
     model: item?.model ?? "",
     displayName: item?.displayName ?? "",
     temperature: item?.temperature ?? 0.3,
-    maxTokens: item?.maxTokens ?? 1024,
+    maxTokens: item?.maxTokens ?? 2048,
     enabled: item?.enabled ?? true,
     isDefault: item?.isDefault ?? false,
   });

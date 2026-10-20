@@ -190,7 +190,7 @@ impl Db {
                 model        TEXT NOT NULL,
                 display_name TEXT NOT NULL DEFAULT '',
                 temperature  REAL NOT NULL DEFAULT 0.3,
-                max_tokens   INTEGER NOT NULL DEFAULT 1024,
+                max_tokens   INTEGER NOT NULL DEFAULT 2048,
                 enabled      INTEGER NOT NULL DEFAULT 1,
                 is_default   INTEGER NOT NULL DEFAULT 0
             );
@@ -230,6 +230,29 @@ impl Db {
             "#,
         )
         .map_err(err)?;
+
+        // 一次性迁移：旧版默认 max_tokens 是 1024，模型偶尔先写一段分析就会撞上限被截断，
+        // 导致整题漏答。新默认值改为 2048。
+        // 只升级「仍等于旧默认值」的行，用户自己调过的数值不动；标记写进 settings，
+        // 避免每次启动都覆盖用户之后手动改回 1024 的选择。
+        let migrated: Option<String> = conn
+            .query_row(
+                "SELECT value FROM settings WHERE key = 'migrated_max_tokens_2048'",
+                [],
+                |r| r.get(0),
+            )
+            .optional()
+            .map_err(err)?;
+        if migrated.is_none() {
+            conn.execute("UPDATE models SET max_tokens = 2048 WHERE max_tokens = 1024", [])
+                .map_err(err)?;
+            conn.execute(
+                "INSERT OR REPLACE INTO settings(key, value) VALUES('migrated_max_tokens_2048', '1')",
+                [],
+            )
+            .map_err(err)?;
+        }
+
         Ok(Self {
             conn: Mutex::new(conn),
         })
@@ -386,7 +409,7 @@ impl Db {
             .filter(|s| !s.is_empty())
             .unwrap_or_else(|| input.model.clone());
         let temperature = input.temperature.unwrap_or(0.3);
-        let max_tokens = input.max_tokens.unwrap_or(1024);
+        let max_tokens = input.max_tokens.unwrap_or(2048);
         let enabled = input.enabled.unwrap_or(true) as i64;
         let is_default = input.is_default.unwrap_or(false) as i64;
         let id = match input.id {
@@ -482,7 +505,7 @@ impl Db {
             };
             conn.execute(
                 "INSERT INTO models(provider_id, model, display_name, temperature, max_tokens, enabled, is_default)
-                 VALUES(?1,?2,?2,0.3,1024,1,?3)",
+                 VALUES(?1,?2,?2,0.3,2048,1,?3)",
                 params![provider_id, name, is_default],
             )
             .map_err(err)?;

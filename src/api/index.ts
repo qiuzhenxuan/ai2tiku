@@ -20,6 +20,8 @@ import type {
 export const api = {
   // 设置与服务
   getSettings: () => invoke<Settings>("get_settings"),
+  /** 内置默认提示词原文，设置页用来展示 */
+  defaultSystemPrompt: () => invoke<string>("default_system_prompt"),
   saveSettings: (settings: Settings) => invoke<Settings>("save_settings", { settings }),
   serverStatus: () => invoke<ServerStatus>("server_status"),
   startServer: () => invoke<ServerStatus>("start_server"),

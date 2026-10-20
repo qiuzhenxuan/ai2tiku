@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
 import { api } from "../api";
 import type { ServerStatus } from "../api/types";
 import AppIcon from "../components/AppIcon.vue";
@@ -16,18 +16,46 @@ const form = reactive({
   proxyUrl: "",
 });
 
+/** 内置提示词原文：用来填充输入框，让用户看得到、也能在此基础上改 */
+const builtinPrompt = ref("");
+
+/** 当前是否在用内置提示词 */
+const usingBuiltin = computed(() => form.systemPrompt.trim() === "");
+
+/**
+ * 输入框显示的内容：没自定义时显示内置提示词原文（可读、可改），
+ * 一旦用户动手编辑就变成自定义内容（写入 form.systemPrompt）。
+ */
+const promptText = computed({
+  get: () => (usingBuiltin.value ? builtinPrompt.value : form.systemPrompt),
+  set: (v: string) => {
+    form.systemPrompt = v;
+  },
+});
+
 const status = ref<ServerStatus | null>(null);
 const saving = ref(false);
 const busy = ref(false);
 
 async function load() {
   try {
-    const [s, st] = await Promise.all([api.getSettings(), api.serverStatus()]);
+    const [s, st, builtin] = await Promise.all([
+      api.getSettings(),
+      api.serverStatus(),
+      api.defaultSystemPrompt(),
+    ]);
     Object.assign(form, s);
     status.value = st;
+    builtinPrompt.value = builtin;
   } catch (e) {
     toast.fromError(e);
   }
+}
+
+/** 恢复使用内置提示词 */
+function restoreDefault() {
+  form.systemPrompt = "";
+  toast.ok("已恢复内置提示词，点「保存设置」生效");
 }
 
 async function save() {
@@ -164,27 +192,37 @@ onMounted(load);
     <div class="card">
       <div class="card__head">
         <AppIcon name="sparkles" :size="15" />
-        <span class="card__title">自定义系统提示词</span>
-        <span class="card__hint">留空使用内置提示词</span>
+        <span class="card__title">系统提示词</span>
+        <span class="badge" :class="usingBuiltin ? 'badge--ok' : 'badge--off'" style="margin-left: auto">
+          <span class="dot" />
+          {{ usingBuiltin ? "使用内置" : "自定义" }}
+        </span>
       </div>
       <div class="card__body stack">
         <textarea
-          v-model="form.systemPrompt"
+          v-model="promptText"
           class="textarea"
-          rows="7"
-          placeholder="留空则使用内置的答题提示词（要求模型返回 answer / explanation 的 JSON）"
+          rows="14"
+          spellcheck="false"
+          placeholder="加载中…"
         />
         <div class="callout">
           <AppIcon name="info" :size="16" />
           <div>
-            内置提示词会要求模型对单选题返回选项字母、多选题返回字母数组、填空题返回文本。
-            自定义时请保持同样的输出约定，否则答案格式可能无法被 OCS 正确解析。
+            上面就是当前实际生效的提示词：未修改时显示内置默认值，直接编辑即成为自定义提示词。
+            自定义时请保留 JSON 输出约定（<code class="mono">answer</code> /
+            <code class="mono">explanation</code>），否则答案格式可能无法被 OCS 正确解析；
+            多选题的答案字母会由程序自动用 <code class="mono">#</code> 连接。
           </div>
         </div>
         <div class="row">
           <button class="btn btn--primary" type="button" :disabled="saving" @click="save">
             <AppIcon name="check" :size="14" />
             保存设置
+          </button>
+          <button class="btn" type="button" :disabled="usingBuiltin" @click="restoreDefault">
+            <AppIcon name="refresh" :size="14" />
+            恢复内置
           </button>
         </div>
       </div>

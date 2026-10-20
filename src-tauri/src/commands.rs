@@ -12,6 +12,12 @@ pub fn get_settings(state: State<'_, SharedState>) -> R<Settings> {
     state.db.settings()
 }
 
+/// 内置默认提示词原文：设置页把它显示出来，用户才能看到并在此基础上修改
+#[tauri::command]
+pub fn default_system_prompt() -> String {
+    crate::ai::default_system_prompt().to_string()
+}
+
 #[tauri::command]
 pub fn save_settings(state: State<'_, SharedState>, settings: Settings) -> R<Settings> {
     let before = state.db.settings()?;

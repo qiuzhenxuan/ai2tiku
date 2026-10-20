@@ -3,9 +3,23 @@ import { computed, onMounted, reactive, ref } from "vue";
 import { api } from "../api";
 import type { ServerStatus } from "../api/types";
 import AppIcon from "../components/AppIcon.vue";
+import { ACCENT_PRESETS, useAccent } from "../composables/useAccent";
+import { useTheme } from "../composables/useTheme";
 import { useToast } from "../composables/useToast";
 
 const toast = useToast();
+
+const { accent, setAccent } = useAccent();
+const { theme } = useTheme();
+
+/** 色点跟着当前日夜主题取对应那一档，所见即所得 */
+function swatchColor(p: (typeof ACCENT_PRESETS)[number]) {
+  return theme.value === "dark" ? p.dark : p.light;
+}
+
+const activeAccentLabel = computed(
+  () => ACCENT_PRESETS.find((p) => p.id === accent.value)?.label ?? "",
+);
 
 const form = reactive({
   port: 3100,
@@ -90,6 +104,30 @@ onMounted(load);
 
 <template>
   <div class="page">
+    <div class="card">
+      <div class="card__head">
+        <AppIcon name="sun" :size="15" />
+        <span class="card__title">主题色</span>
+        <span class="card__hint">点击立即生效，只改强调色，不影响日间 / 夜间</span>
+      </div>
+      <div class="card__body">
+        <div class="swatches">
+          <button
+            v-for="p in ACCENT_PRESETS"
+            :key="p.id"
+            type="button"
+            class="swatch"
+            :class="{ 'is-active': accent === p.id }"
+            :style="{ '--swatch': swatchColor(p) }"
+            :title="p.label"
+            :aria-label="p.label"
+            @click="setAccent(p.id)"
+          />
+          <span class="swatches__label">{{ activeAccentLabel }}</span>
+        </div>
+      </div>
+    </div>
+
     <div class="card">
       <div class="card__head">
         <AppIcon name="plug" :size="15" />

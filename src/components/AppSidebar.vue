@@ -18,19 +18,15 @@ const navItems = routes.map((r) => ({
   title: (r.meta?.title as string) ?? "",
   icon: ICON_MAP[r.name as string] ?? "info",
 }));
+
+const version = __APP_VERSION__;
 </script>
 
 <template>
-  <aside class="sidebar">
-    <div class="brand">
-      <div class="brand__mark">AI</div>
-      <div>
-        <div class="brand__name">ai2tiku</div>
-        <div class="brand__sub">OCS 智能题库</div>
-      </div>
-    </div>
+  <aside class="rail">
+    <div class="rail__brand" title="ai2tiku · OCS 智能题库">AI</div>
 
-    <nav class="nav">
+    <nav class="rail__nav">
       <RouterLink
         v-for="item in navItems"
         :key="item.name"
@@ -40,18 +36,17 @@ const navItems = routes.map((r) => ({
       >
         <button
           type="button"
-          class="nav__item"
+          class="rail__item"
           :class="{ 'is-active': isActive }"
+          :title="item.title"
+          :aria-label="item.title"
           @click="navigate"
         >
-          <AppIcon :name="item.icon" :size="16" class="nav__icon" />
-          {{ item.title }}
+          <AppIcon :name="item.icon" :size="18" />
         </button>
       </RouterLink>
     </nav>
 
-    <div class="sidebar__foot">
-      本地运行 · 仅监听 127.0.0.1
-    </div>
+    <div class="rail__foot" :title="`版本 ${version}`">v{{ version }}</div>
   </aside>
 </template>

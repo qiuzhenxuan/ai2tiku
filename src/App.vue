@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useRoute } from "vue-router";
 import AppSidebar from "./components/AppSidebar.vue";
+import TitleBar from "./components/TitleBar.vue";
 import ThemeToggle from "./components/ThemeToggle.vue";
 import ToastHost from "./components/ToastHost.vue";
 import { api } from "./api";
@@ -34,6 +35,7 @@ onUnmounted(() => {
 
 <template>
   <div class="app-shell">
+    <TitleBar />
     <AppSidebar />
 
     <div class="main">

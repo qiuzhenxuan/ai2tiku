@@ -107,7 +107,7 @@ onMounted(load);
               {{ status?.running ? "运行中" : "已停止" }}
             </span>
           </div>
-          <RouterLink to="/ocs" class="btn btn--primary" style="justify-content: center">
+          <RouterLink to="/ocs" class="btn btn--primary" style="align-self: flex-start">
             <AppIcon name="copy" :size="14" />
             生成 OCS 题库配置
           </RouterLink>

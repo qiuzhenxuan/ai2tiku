@@ -2,11 +2,20 @@ import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
 // @ts-expect-error type error without @types/node package
 import process from "node:process";
+// @ts-expect-error type error without @types/node package
+import { readFileSync } from "node:fs";
 const host = process.env.TAURI_DEV_HOST;
+
+// 版本号只在标题栏角落展示，直接从 tauri.conf.json 读取，避免再走一次运行时调用
+const appVersion = JSON.parse(readFileSync("./src-tauri/tauri.conf.json", "utf8")).version;
 
 // https://vite.dev/config/
 export default defineConfig(() => ({
   plugins: [vue()],
+
+  define: {
+    __APP_VERSION__: JSON.stringify(appVersion),
+  },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //

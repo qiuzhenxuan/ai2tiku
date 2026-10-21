@@ -53,6 +53,8 @@ pub fn run() {
             commands::default_system_prompt,
             commands::save_settings,
             commands::server_status,
+            commands::get_ui_pref,
+            commands::set_ui_pref,
             commands::start_server,
             commands::stop_server,
             commands::list_providers,

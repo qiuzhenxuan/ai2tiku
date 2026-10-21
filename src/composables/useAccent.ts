@@ -1,4 +1,5 @@
 import { ref } from "vue";
+import { api } from "../api";
 
 export type AccentId =
   | "blue"
@@ -32,13 +33,19 @@ export const ACCENT_PRESETS: AccentPreset[] = [
 ];
 
 const STORAGE_KEY = "ai2tiku:accent";
+const PREF_KEY = "accent";
 
-function detect(): AccentId {
-  const saved = localStorage.getItem(STORAGE_KEY);
-  return ACCENT_PRESETS.some((p) => p.id === saved) ? (saved as AccentId) : "blue";
+function isAccentId(v: unknown): v is AccentId {
+  return ACCENT_PRESETS.some((p) => p.id === v);
 }
 
-const accent = ref<AccentId>(detect());
+/** 本地缓存只用来让首屏不闪，真正的记忆在数据库里 */
+function cached(): AccentId | null {
+  const saved = localStorage.getItem(STORAGE_KEY);
+  return isAccentId(saved) ? saved : null;
+}
+
+const accent = ref<AccentId>(cached() ?? "blue");
 
 function apply(id: AccentId) {
   document.documentElement.dataset.accent = id;
@@ -46,12 +53,33 @@ function apply(id: AccentId) {
 
 apply(accent.value);
 
-/** 主题色自选，颜色由 CSS 的 [data-accent] 变量接管，选择结果会记住 */
+/**
+ * 启动时从数据库同步一次：
+ * - 数据库有值 → 以数据库为准（换机器/清缓存也能恢复）
+ * - 数据库没值但有本地缓存 → 把缓存写进数据库（老用户平滑迁移）
+ */
+export async function hydrateAccent() {
+  try {
+    const stored = await api.getUiPref(PREF_KEY);
+    if (isAccentId(stored)) {
+      accent.value = stored;
+      apply(stored);
+      localStorage.setItem(STORAGE_KEY, stored);
+    } else {
+      await api.setUiPref(PREF_KEY, accent.value);
+    }
+  } catch {
+    /* 浏览器预览等非 Tauri 环境忽略 */
+  }
+}
+
+/** 主题色自选，选择同时写入数据库与本地缓存，重启后依然生效 */
 export function useAccent() {
   function setAccent(id: AccentId) {
     accent.value = id;
-    localStorage.setItem(STORAGE_KEY, id);
     apply(id);
+    localStorage.setItem(STORAGE_KEY, id);
+    api.setUiPref(PREF_KEY, id).catch(() => {});
   }
 
   return { accent, setAccent };

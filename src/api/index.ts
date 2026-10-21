@@ -27,6 +27,10 @@ export const api = {
   startServer: () => invoke<ServerStatus>("start_server"),
   stopServer: () => invoke<ServerStatus>("stop_server"),
 
+  // 界面偏好（主题色等），存本地数据库，重启不丢
+  getUiPref: (key: string) => invoke<string | null>("get_ui_pref", { key }),
+  setUiPref: (key: string, value: string) => invoke<void>("set_ui_pref", { key, value }),
+
   // 供应商
   listProviders: () => invoke<Provider[]>("list_providers"),
   listProviderPresets: () => invoke<ProviderPreset[]>("list_provider_presets"),

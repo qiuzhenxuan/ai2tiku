@@ -41,6 +41,19 @@ pub fn server_status(state: State<'_, SharedState>) -> R<ServerStatus> {
     Ok(crate::server::status(state.inner()))
 }
 
+// ---------- 界面偏好 ----------
+
+/// 读取落库的界面偏好（主题色等），没有就返回 null
+#[tauri::command]
+pub fn get_ui_pref(state: State<'_, SharedState>, key: String) -> R<Option<String>> {
+    state.db.ui_pref(&key)
+}
+
+#[tauri::command]
+pub fn set_ui_pref(state: State<'_, SharedState>, key: String, value: String) -> R<()> {
+    state.db.set_ui_pref(&key, &value)
+}
+
 #[tauri::command]
 pub fn start_server(state: State<'_, SharedState>) -> R<ServerStatus> {
     let port = state.db.settings()?.port;

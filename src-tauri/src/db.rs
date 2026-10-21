@@ -316,6 +316,33 @@ impl Db {
         Ok(())
     }
 
+    // ---------- 界面偏好（主题色等） ----------
+    // 存在 settings 表里，加 ui: 前缀，和业务设置共用一套落库逻辑。
+    // 之所以不只放 localStorage：WebView 的 localStorage 按 origin 分开存，
+    // 换一次运行方式（dev / 安装版）就取不到了，重启后主题色会丢。
+
+    pub fn ui_pref(&self, key: &str) -> R<Option<String>> {
+        let conn = self.lock()?;
+        conn.query_row(
+            "SELECT value FROM settings WHERE key = ?1",
+            params![format!("ui:{key}")],
+            |r| r.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(err)
+    }
+
+    pub fn set_ui_pref(&self, key: &str, value: &str) -> R<()> {
+        let conn = self.lock()?;
+        conn.execute(
+            "INSERT INTO settings(key, value) VALUES(?1, ?2)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            params![format!("ui:{key}"), value],
+        )
+        .map_err(err)?;
+        Ok(())
+    }
+
     // ---------- 供应商 ----------
 
     pub fn list_providers(&self) -> R<Vec<Provider>> {

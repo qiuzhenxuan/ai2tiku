@@ -22,16 +22,14 @@ pub fn default_system_prompt() -> &'static str {
     DEFAULT_SYSTEM_PROMPT
 }
 
-/// 第一次没取到答案时的重试提示。
-///
-/// 之所以需要它：模型偶尔会先长篇分析再给答案，回复在 max_tokens 上限处被截断，
-/// 整段文本既解析不出 JSON、也抠不出选项字母，最后返回「空答案」导致漏题。
-/// 这里改成「只要答案」的极短输出，就不会再撞上限。
-const RETRY_SYSTEM_PROMPT: &str = r#"你是答题助手。只输出答案本身，不要任何解释、分析、过程描述、序号或多余文字。
-- 单选题：只输出选项字母，例如 A
-- 多选题：按字母顺序输出，字母之间用 # 连接，例如 A#C
-- 判断题：只输出 对 或 错
-- 填空题：只输出要填入的内容；有多个空时按顺序用 # 连接，例如 张三#李四"#;
+/// 首次回复不完整或格式无效时重试一次，仍允许模型明确表示无法确定。
+const RETRY_SYSTEM_PROMPT: &str = r#"你是答题助手。只输出答案本身对应的 JSON 对象，不要分析或额外文字。
+格式：{"answer": <答案>}。
+- 单选题：一个选项字母，例如 {"answer":"A"}
+- 多选题：选项字母数组，例如 {"answer":["A","C"]}
+- 判断题："对" 或 "错"
+- 填空题：字符串或按空位顺序排列的字符串数组，不得省略任何空位
+- 无法确定、信息不足或任一空无法作答时：{"answer":""}，不要猜测。"#;
 
 const TYPE_LABELS: &[(&str, &str)] = &[
     ("single", "单选题"),
@@ -92,81 +90,6 @@ fn describe(e: &reqwest::Error) -> String {
     parts.join(" → ")
 }
 
-/// 去掉 Markdown 代码块围栏，尽力从回复中取出 JSON 对象
-fn extract_json(content: &str) -> Option<Value> {
-    let cleaned = content.trim();
-    if let Ok(v) = serde_json::from_str::<Value>(cleaned) {
-        return Some(v);
-    }
-    let unfenced = cleaned
-        .trim_start_matches("```json")
-        .trim_start_matches("```JSON")
-        .trim_start_matches("```")
-        .trim_end_matches("```")
-        .trim();
-    if let Ok(v) = serde_json::from_str::<Value>(unfenced) {
-        return Some(v);
-    }
-    let start = unfenced.find('{')?;
-    let end = unfenced.rfind('}')?;
-    if end > start {
-        return serde_json::from_str::<Value>(&unfenced[start..=end]).ok();
-    }
-    None
-}
-
-/// 把 AI 返回的 answer 字段转成 OCS 能识别的答案字符串。
-/// OCS 官方文档明确要求：多个答案用「特殊符号」连接，而不是写成数组
-/// （文档示例是 join('#')，FQA 里填空题多空也用 `张三#李四#王五`）。
-/// 所以这里多选字母、填空多空一律用 '#' 拼接。
-fn to_ocs_answer(v: Option<&Value>) -> String {
-    match v {
-        Some(Value::Array(items)) => {
-            let list: Vec<String> = items
-                .iter()
-                .map(|x| match x {
-                    Value::String(s) => s.trim().to_string(),
-                    other => other.to_string(),
-                })
-                .filter(|s| !s.is_empty())
-                .collect();
-            list.join("#")
-        }
-        Some(Value::String(s)) => s.trim().to_string(),
-        Some(Value::Null) | None => String::new(),
-        Some(other) => other.to_string(),
-    }
-}
-
-/// 兜底：从纯文本回复里抠出选项字母
-fn guess_letters(content: &str) -> String {
-    let letters: Vec<char> = content
-        .chars()
-        .filter(|c| c.is_ascii_alphabetic())
-        .map(|c| c.to_ascii_uppercase())
-        .collect();
-    if letters.is_empty() || letters.len() > 4 {
-        return String::new();
-    }
-    letters
-        .iter()
-        .map(|c| c.to_string())
-        .collect::<Vec<_>>()
-        .join("")
-}
-
-/// 填空题：模型没给 JSON、直接吐了纯文本答案时的兜底。
-/// 只有短且没有换行的才算答案 —— 长篇大论（尤其被 max_tokens 截断的那种）不是答案，
-/// 返回空让上层去重试，也好过把一段议论文交给 OCS。
-fn loose_text_answer(content: &str) -> String {
-    let t = content.trim();
-    if t.is_empty() || t.contains('\n') || t.chars().count() > 50 {
-        String::new()
-    } else {
-        t.to_string()
-    }
-}
-
 /// 单次模型调用的结果；`answer` 为空表示这次没拿到可用答案
 struct Completion {
     answer: String,
@@ -210,6 +133,7 @@ pub async fn ask(
         provider,
         model,
         qtype,
+        options,
         &user,
         images,
         system,
@@ -227,9 +151,7 @@ pub async fn ask(
         });
     }
 
-    // 第一次没拿到答案：多半是模型先写了一段分析、回复在 max_tokens 上限被截断，
-    // 截断后既解析不出 JSON、也抠不出选项字母。
-    // 换「只要答案」的提示重试一次 —— 这种输出只有几个 token，不会再撞上限。
+    // 首次答案未通过校验，用短 JSON 提示重试一次；重试结果仍须通过相同校验。
     let (mut p, mut c, mut t) = (
         first.prompt_tokens,
         first.completion_tokens,
@@ -249,6 +171,7 @@ pub async fn ask(
         provider,
         model,
         qtype,
+        options,
         &user,
         images,
         RETRY_SYSTEM_PROMPT,
@@ -290,6 +213,7 @@ async fn complete(
     provider: &Provider,
     model: &AiModel,
     qtype: &str,
+    options: &str,
     user_text: &str,
     images: &[String],
     system: &str,
@@ -343,7 +267,8 @@ async fn complete(
         // 「messages.content.type 参数非法」之类的提示，看不出是模型选错了
         if !images.is_empty() {
             let lower = text.to_lowercase();
-            if lower.contains("content.type") || lower.contains("image") || lower.contains("vision") {
+            if lower.contains("content.type") || lower.contains("image") || lower.contains("vision")
+            {
                 msg.push_str("；当前模型可能不支持图片输入，请在「AI 供应商」里改用支持视觉的模型（如 glm-4.5v、qwen-vl-max）");
             }
         }
@@ -367,8 +292,9 @@ async fn complete(
         .as_i64()
         .unwrap_or(prompt_tokens + completion_tokens);
 
-    let parsed = extract_json(&content);
-    let mut answer = to_ocs_answer(parsed.as_ref().and_then(|v| v.get("answer")));
+    let parsed = crate::answers::extract_json(&content);
+    let finish = value["choices"][0]["finish_reason"].as_str().unwrap_or("");
+    let answer = crate::answers::parse(&content, qtype, options, finish);
     let explanation = parsed
         .as_ref()
         .and_then(|v| v.get("explanation"))
@@ -376,24 +302,6 @@ async fn complete(
         .unwrap_or("")
         .trim()
         .to_string();
-
-    // 模型没按格式返回时兜底处理
-    if answer.is_empty() {
-        if qtype == "completion" {
-            answer = loose_text_answer(&content);
-        } else if qtype == "multiple" {
-            let letters = guess_letters(&content);
-            if !letters.is_empty() {
-                answer = letters
-                    .chars()
-                    .map(|c| c.to_string())
-                    .collect::<Vec<_>>()
-                    .join("#");
-            }
-        } else {
-            answer = guess_letters(&content);
-        }
-    }
 
     Ok(Completion {
         answer,
@@ -468,7 +376,10 @@ pub async fn fetch_models(
 }
 
 /// 测试供应商连通性
-pub async fn test_provider(client: &reqwest::Client, provider: &Provider) -> Result<String, String> {
+pub async fn test_provider(
+    client: &reqwest::Client,
+    provider: &Provider,
+) -> Result<String, String> {
     let resp = client
         .get(endpoint(&provider.base_url, "models"))
         .bearer_auth(&provider.api_key)
@@ -624,12 +535,49 @@ mod tests {
         assert_eq!(seen.lock().unwrap().len(), 1, "不应发出第二次请求");
     }
 
-    /// 填空题：一段被截断的长篇大论不能被当成答案交出去
-    #[test]
-    fn long_rambling_is_not_a_completion_answer() {
-        assert_eq!(loose_text_answer("这是一段很长的分析，先说结论……"), "这是一段很长的分析，先说结论……");
-        assert_eq!(loose_text_answer("神"), "神");
-        assert_eq!(loose_text_answer("第一行\n第二行"), "");
-        assert_eq!(loose_text_answer(&"字".repeat(60)), "");
+    #[tokio::test]
+    async fn uncertain_replies_remain_failures_after_retry() {
+        let (port, seen) = stub(vec![
+            ("无法判断，A和B都有可能", "stop", 12),
+            ("{\"answer\":\"无法判断，A和B都有可能\"}", "stop", 15),
+        ]);
+        let result = ask(
+            &build_client(""),
+            &provider(port),
+            &model(),
+            "multiple",
+            "题干",
+            "A. 甲\nB. 乙",
+            "",
+            &[],
+        )
+        .await
+        .unwrap();
+        assert!(result.answer.is_empty());
+        assert!(!result.explanation.is_empty());
+        assert_eq!(result.total_tokens, 47);
+        assert_eq!(seen.lock().unwrap().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn truncated_but_parseable_answer_must_retry() {
+        let (port, seen) = stub(vec![
+            ("{\"answer\":\"A\"}", "length", 1024),
+            ("{\"answer\":\"B\"}", "stop", 10),
+        ]);
+        let result = ask(
+            &build_client(""),
+            &provider(port),
+            &model(),
+            "single",
+            "题干",
+            "A. 甲\nB. 乙",
+            "",
+            &[],
+        )
+        .await
+        .unwrap();
+        assert_eq!(result.answer, "B");
+        assert_eq!(seen.lock().unwrap().len(), 2);
     }
 }

@@ -349,45 +349,61 @@ a {
   box-shadow: var(--shadow-sm);
 }
 
-/* 齿轮：悬停顺时针转开，移开时沿原路逆时针转回 */
-.rail__item--spin svg {
+/* 动效只作用于导航图标，移开/失焦后沿原路复位。 */
+.rail__item svg > * {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 360ms var(--ease);
+}
+
+.rail__item svg > :nth-child(2) { transition-delay: 35ms; }
+.rail__item svg > :nth-child(3) { transition-delay: 70ms; }
+.rail__item svg > :nth-child(4) { transition-delay: 105ms; }
+
+.rail__item--settings svg {
+  transform-origin: center;
   transition: transform 620ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
-.rail__wrap:hover .rail__item--spin svg {
+.rail__item--settings:is(:hover, :focus-visible) svg {
   transform: rotate(150deg);
 }
+
+.rail__item--dashboard:is(:hover, :focus-visible) svg > :nth-child(1) { transform: translate(-1px, -1px); }
+.rail__item--dashboard:is(:hover, :focus-visible) svg > :nth-child(2) { transform: translate(1px, -1px); }
+.rail__item--dashboard:is(:hover, :focus-visible) svg > :nth-child(3) { transform: translate(1px, 1px); }
+.rail__item--dashboard:is(:hover, :focus-visible) svg > :nth-child(4) { transform: translate(-1px, 1px); }
+.rail__item--plug:is(:hover, :focus-visible) svg > :nth-child(3) { transform: translateY(-2px); }
+.rail__item--plug:is(:hover, :focus-visible) svg > :nth-child(4) { transform: scaleY(1.2); transform-origin: bottom; }
+.rail__item--sparkles:is(:hover, :focus-visible) svg > :nth-child(1) { transform: scale(1.12) rotate(12deg); }
+.rail__item--sparkles:is(:hover, :focus-visible) svg > :nth-child(2) { transform: scale(1.2) rotate(-15deg); transition-delay: 90ms; }
+.rail__item--database:is(:hover, :focus-visible) svg > :nth-child(1) { transform: translateY(-2px); }
+.rail__item--database:is(:hover, :focus-visible) svg > :nth-child(2) { transform: scaleY(1.05); transform-origin: bottom; }
+.rail__item--database:is(:hover, :focus-visible) svg > :nth-child(3) { transform: translateY(-1px); }
+.rail__item--list:is(:hover, :focus-visible) svg > path { transform: translateX(1.5px) scaleX(1.05); transform-origin: left; }
+.rail__item--chart svg > rect { transform-origin: center bottom; }
+.rail__item--chart:is(:hover, :focus-visible) svg > :nth-child(2) { transform: scaleY(1.25); }
+.rail__item--chart:is(:hover, :focus-visible) svg > :nth-child(3) { transform: scaleY(1.15); }
+.rail__item--chart:is(:hover, :focus-visible) svg > :nth-child(4) { transform: scaleY(1.5); }
+.rail__item:active svg { scale: 0.92; }
 
 /* 悬停展开的小卡片：宽度从 0 撑开，内容固定宽度不被挤压 */
 .rail__flyout {
   position: absolute;
-  left: calc(100% + 4px);
+  left: calc(100% - 8px);
   top: 50%;
   transform: translateY(-50%);
-  width: 0;
-  overflow: hidden;
+  width: 226px;
+  padding-left: 12px;
+  visibility: hidden;
   opacity: 0;
   pointer-events: none;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  box-shadow: var(--shadow-md);
   z-index: 40;
-  transition: width 190ms var(--ease), opacity 130ms var(--ease);
+  transition: opacity 130ms var(--ease), visibility 130ms;
 }
 
-/* 让鼠标从图标滑到卡片时不中断 hover */
-.rail__flyout::after {
-  content: "";
-  position: absolute;
-  left: -8px;
-  top: 0;
-  bottom: 0;
-  width: 8px;
-}
-
-.rail__wrap:hover .rail__flyout {
-  width: 210px;
+.rail__wrap.is-open .rail__flyout {
+  visibility: visible;
   opacity: 1;
   pointer-events: auto;
 }
@@ -395,6 +411,19 @@ a {
 .rail__flyout-inner {
   width: 210px;
   padding: 9px 12px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-md);
+  transform: translateX(-5px);
+  transition: transform 190ms var(--ease);
+}
+
+.rail__wrap.is-open .rail__flyout-inner { transform: translateX(0); }
+
+@media (prefers-reduced-motion: reduce) {
+  .rail *, .rail *::before, .rail *::after { transition: none !important; animation: none !important; }
+  .rail__item svg, .rail__item svg > *, .rail__flyout-inner { transform: none !important; scale: none !important; }
 }
 
 .rail__flyout-title {

@@ -7,23 +7,24 @@ pub struct Db {
     conn: Mutex<Connection>,
 }
 
-/// 题干归一化：去掉空白、标点、题号标记，便于匹配
+/// 只统一空白并移除明确包裹的题型标签；符号、数字和大小写均可能影响语义。
 pub fn normalize(input: &str) -> String {
-    const DROP: &str = "【】[]()（）{}.,，。、?？!！:：;；'\"“”‘’《》<>-_—+=*/\\|~`@#$%^&";
-    let mut out = String::with_capacity(input.len());
-    for ch in input.chars() {
-        if ch.is_whitespace() || DROP.contains(ch) {
-            continue;
-        }
-        out.extend(ch.to_lowercase());
-    }
-    // 去掉常见的题型前缀，避免同一道题因标记不同而无法命中
+    let mut text = input.trim();
     for tag in ["单选题", "多选题", "判断题", "填空题", "简答题"] {
-        if out.starts_with(tag) {
-            out = out[tag.len()..].to_string();
+        for (left, right) in [("【", "】"), ("[", "]"), ("（", "）"), ("(", ")")] {
+            if let Some(rest) = text.strip_prefix(&format!("{left}{tag}{right}")) {
+                text = rest.trim_start();
+            }
         }
     }
-    out
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+// 模糊匹配不能绕过符号保护：数学符号、数字、英文变量的变化必须回退 AI。
+fn semantic_tokens(text: &str) -> String {
+    text.chars()
+        .filter(|c| !c.is_whitespace() && (c.is_ascii() || c.is_numeric() || !c.is_alphanumeric()))
+        .collect()
 }
 
 /// 归一化编辑距离相似度，范围 0..=1
@@ -81,16 +82,28 @@ fn strip_option_label(line: &str) -> &str {
         return s;
     }
     let rest = &body[end..];
+    let label = &body[..end];
+    // 小数和英文正文不是选项编号，尤其不能把 1.5 变成 5。
+    let letter_label = label.len() == 1 && label.as_bytes()[0].is_ascii_uppercase();
+    let number_label = label.bytes().all(|c| c.is_ascii_digit());
+    if !letter_label && !number_label {
+        return s;
+    }
+    if number_label && rest.starts_with('.') && !rest[1..].starts_with(char::is_whitespace) {
+        return s;
+    }
     let mut it = rest.chars();
     match it.next() {
-        Some(c) if matches!(c, '.' | '、' | ')' | '）' | ',' | '，' | ':' | '：') => it.as_str().trim(),
+        Some(c) if matches!(c, '.' | '、' | ')' | '）' | ',' | '，' | ':' | '：') => {
+            it.as_str().trim()
+        }
         Some(' ') | Some('\t') => rest.trim(),
         _ => s,
     }
 }
 
-/// 选项正文列表，按行顺序（已去编号、去标点空白、转小写）
-fn option_texts(options: &str) -> Vec<String> {
+/// 选项正文列表，保留语义符号及大小写。
+pub(crate) fn option_texts(options: &str) -> Vec<String> {
     options
         .lines()
         .map(strip_option_label)
@@ -125,10 +138,24 @@ fn is_letter_answer(answer: &str) -> bool {
 /// 把缓存里的字母答案换算成「当前这组选项」下的字母。
 /// 选项乱序时同一道题的字母会变（北京从 A 挪到 B），必须按选项正文重新定位；
 /// 选项内容/数量对不上则返回 None —— 表示这条缓存不能安全复用，宁可回退到 AI 也不能答错。
-fn remap_letter_answer(stored_options: &str, current_options: &str, answer: &str) -> Option<String> {
+fn remap_letter_answer(
+    stored_options: &str,
+    current_options: &str,
+    answer: &str,
+) -> Option<String> {
     let stored = option_texts(stored_options);
     let current = option_texts(current_options);
-    if stored.is_empty() || stored.len() != current.len() {
+    if stored.is_empty()
+        || stored.len() > 26
+        || option_signature(stored_options) != option_signature(current_options)
+    {
+        return None;
+    }
+    // 重复正文无法唯一确定乱序映射，拒绝猜测。
+    let mut unique = current.clone();
+    unique.sort();
+    unique.dedup();
+    if unique.len() != current.len() {
         return None;
     }
     let mut out: Vec<String> = Vec::new();
@@ -145,12 +172,32 @@ fn remap_letter_answer(stored_options: &str, current_options: &str, answer: &str
 }
 
 /// 一条缓存能否用于当前这组选项；可以则返回该直接使用的答案
-fn answer_for_options(q: &Question, current_options: &str) -> Option<String> {
-    if !is_letter_answer(&q.answer) {
-        // 填空题、判断题的答案是文本，与选项顺序无关
-        return Some(q.answer.clone());
+fn answer_for_options(q: &Question, current_options: &str, qtype: &str) -> Option<String> {
+    if qtype.is_empty()
+        || qtype == "unknown"
+        || q.qtype != qtype
+        || q.answer.trim().is_empty()
+        || option_signature(&q.options) != option_signature(current_options)
+    {
+        return None;
     }
-    remap_letter_answer(&q.options, current_options, &q.answer)
+    let value = crate::answers::extract_json(&q.answer)
+        .filter(|v| v.is_array() || v.is_string())
+        .unwrap_or_else(|| serde_json::Value::String(q.answer.clone()));
+    let validated = crate::answers::validate(&value, qtype, &q.options);
+    if !matches!(qtype, "single" | "multiple") {
+        return validated;
+    }
+    if let Some(answer) = validated {
+        return remap_letter_answer(&q.options, current_options, &answer);
+    }
+    if !is_letter_answer(&q.answer) {
+        // 选择题文本答案也必须是当前选项正文之一，不能直接放行任意文本。
+        let texts = option_texts(current_options);
+        let answer = normalize(&q.answer);
+        return (texts.iter().filter(|t| **t == answer).count() == 1).then(|| q.answer.clone());
+    }
+    None
 }
 
 pub fn now() -> String {
@@ -172,7 +219,7 @@ impl Db {
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir).map_err(err)?;
         }
-        let conn = Connection::open(path).map_err(err)?;
+        let mut conn = Connection::open(path).map_err(err)?;
         conn.execute_batch(
             r#"
             PRAGMA journal_mode = WAL;
@@ -244,13 +291,51 @@ impl Db {
             .optional()
             .map_err(err)?;
         if migrated.is_none() {
-            conn.execute("UPDATE models SET max_tokens = 2048 WHERE max_tokens = 1024", [])
-                .map_err(err)?;
+            conn.execute(
+                "UPDATE models SET max_tokens = 2048 WHERE max_tokens = 1024",
+                [],
+            )
+            .map_err(err)?;
             conn.execute(
                 "INSERT OR REPLACE INTO settings(key, value) VALUES('migrated_max_tokens_2048', '1')",
                 [],
             )
             .map_err(err)?;
+        }
+
+        // 新归一化规则必须同步旧行；事务同时提交匹配键与版本标记，失败可安全重试。
+        let key_version: Option<String> = conn
+            .query_row(
+                "SELECT value FROM settings WHERE key = 'question_key_version'",
+                [],
+                |r| r.get(0),
+            )
+            .optional()
+            .map_err(err)?;
+        if key_version.as_deref() != Some("2") {
+            let tx = conn.transaction().map_err(err)?;
+            let rows = {
+                let mut stmt = tx.prepare("SELECT id, title FROM questions").map_err(err)?;
+                let rows = stmt
+                    .query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)))
+                    .map_err(err)?
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(err)?;
+                rows
+            };
+            for (id, title) in rows {
+                tx.execute(
+                    "UPDATE questions SET normalized_title = ?1 WHERE id = ?2",
+                    params![normalize(&title), id],
+                )
+                .map_err(err)?;
+            }
+            tx.execute(
+                "INSERT OR REPLACE INTO settings(key, value) VALUES('question_key_version', '2')",
+                [],
+            )
+            .map_err(err)?;
+            tx.commit().map_err(err)?;
         }
 
         Ok(Self {
@@ -278,15 +363,11 @@ impl Db {
         };
         let d = Settings::default();
         Ok(Settings {
-            port: get("port")
-                .and_then(|v| v.parse().ok())
-                .unwrap_or(d.port),
+            port: get("port").and_then(|v| v.parse().ok()).unwrap_or(d.port),
             match_threshold: get("match_threshold")
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(d.match_threshold),
-            auto_cache: get("auto_cache")
-                .map(|v| v != "0")
-                .unwrap_or(d.auto_cache),
+            auto_cache: get("auto_cache").map(|v| v != "0").unwrap_or(d.auto_cache),
             ai_fallback: get("ai_fallback")
                 .map(|v| v != "0")
                 .unwrap_or(d.ai_fallback),
@@ -300,8 +381,14 @@ impl Db {
         let pairs = [
             ("port", s.port.to_string()),
             ("match_threshold", s.match_threshold.to_string()),
-            ("auto_cache", if s.auto_cache { "1" } else { "0" }.to_string()),
-            ("ai_fallback", if s.ai_fallback { "1" } else { "0" }.to_string()),
+            (
+                "auto_cache",
+                if s.auto_cache { "1" } else { "0" }.to_string(),
+            ),
+            (
+                "ai_fallback",
+                if s.ai_fallback { "1" } else { "0" }.to_string(),
+            ),
             ("system_prompt", s.system_prompt.clone()),
             ("proxy_url", s.proxy_url.clone()),
         ];
@@ -477,8 +564,11 @@ impl Db {
             }
         };
         if is_default == 1 {
-            conn.execute("UPDATE models SET is_default = 0 WHERE id <> ?1", params![id])
-                .map_err(err)?;
+            conn.execute(
+                "UPDATE models SET is_default = 0 WHERE id <> ?1",
+                params![id],
+            )
+            .map_err(err)?;
         }
         Ok(id)
     }
@@ -599,7 +689,8 @@ impl Db {
         })
     }
 
-    const Q_COLS: &'static str = "id, title, options, qtype, answer, source, provider, model, hits, created_at, updated_at";
+    const Q_COLS: &'static str =
+        "id, title, options, qtype, answer, source, provider, model, hits, created_at, updated_at";
 
     /// 本地题库匹配：先精确命中，再模糊匹配取最高相似度。
     ///
@@ -611,7 +702,13 @@ impl Db {
     /// - 选项内容对不上就放弃这条缓存，宁可回退 AI 也不能答错。
     ///
     /// 返回的 `Question.answer` 已经是「对应当前选项」的答案。
-    pub fn find_local(&self, title: &str, options: &str, threshold: f64) -> R<Option<(Question, f64)>> {
+    pub fn find_local(
+        &self,
+        title: &str,
+        options: &str,
+        qtype: &str,
+        threshold: f64,
+    ) -> R<Option<(Question, f64)>> {
         let key = normalize(title);
         if key.is_empty() {
             return Ok(None);
@@ -633,7 +730,7 @@ impl Db {
             rows
         };
         for q in same {
-            if let Some(answer) = answer_for_options(&q, options) {
+            if let Some(answer) = answer_for_options(&q, options, qtype) {
                 let mut hit = q;
                 hit.answer = answer;
                 return Ok(Some((hit, 1.0)));
@@ -668,17 +765,24 @@ impl Db {
 
         let mut best: Option<(Question, f64)> = None;
         for q in candidates {
-            if !is_letter_answer(&q.answer) || query_sig.is_empty() {
+            if !matches!(qtype, "single" | "multiple")
+                || q.qtype != qtype
+                || !is_letter_answer(&q.answer)
+                || query_sig.is_empty()
+            {
                 continue;
             }
             if option_signature(&q.options) != query_sig {
+                continue;
+            }
+            if semantic_tokens(&key) != semantic_tokens(&normalize(&q.title)) {
                 continue;
             }
             let score = similarity(&key, &normalize(&q.title));
             if score < threshold {
                 continue;
             }
-            let Some(answer) = remap_letter_answer(&q.options, options, &q.answer) else {
+            let Some(answer) = answer_for_options(&q, options, qtype) else {
                 continue;
             };
             if best.as_ref().map(|(_, b)| score > *b).unwrap_or(true) {
@@ -735,10 +839,7 @@ impl Db {
     pub fn save_question(&self, input: &QuestionInput) -> R<i64> {
         let conn = self.lock()?;
         let options = input.options.clone().unwrap_or_default();
-        let qtype = input
-            .qtype
-            .clone()
-            .unwrap_or_else(|| "unknown".into());
+        let qtype = input.qtype.clone().unwrap_or_else(|| "unknown".into());
         let key = normalize(&input.title);
         match input.id {
             Some(id) => {
@@ -774,15 +875,17 @@ impl Db {
     ) -> R<i64> {
         let conn = self.lock()?;
         let key = normalize(title);
-        // 去重键必须是「题干 + 选项」：题干相同但选项不同的其实是另一道题，
+        // 去重键必须是「题干 + 题型 + 完整选项」：题干相同但选项不同的其实是另一道题，
         // 只按题干去重会把上一道题的答案覆盖掉（正是缓存答错的来源之一）。
         let sig = option_signature(options);
         let existing: Option<i64> = {
             let mut stmt = conn
-                .prepare("SELECT id, options FROM questions WHERE normalized_title = ?1")
+                .prepare(
+                    "SELECT id, options FROM questions WHERE normalized_title = ?1 AND qtype = ?2",
+                )
                 .map_err(err)?;
             let rows = stmt
-                .query_map(params![key], |r| {
+                .query_map(params![key, qtype], |r| {
                     Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?))
                 })
                 .map_err(err)?;
@@ -827,15 +930,17 @@ impl Db {
 
     pub fn clear_questions(&self) -> R<()> {
         let conn = self.lock()?;
-        conn.execute("DELETE FROM questions", [])
-            .map_err(err)?;
+        conn.execute("DELETE FROM questions", []).map_err(err)?;
         Ok(())
     }
 
     pub fn bump_hits(&self, id: i64) -> R<()> {
         let conn = self.lock()?;
-        conn.execute("UPDATE questions SET hits = hits + 1 WHERE id = ?1", params![id])
-            .map_err(err)?;
+        conn.execute(
+            "UPDATE questions SET hits = hits + 1 WHERE id = ?1",
+            params![id],
+        )
+        .map_err(err)?;
         Ok(())
     }
 
@@ -1043,7 +1148,16 @@ mod tests {
             id: None,
             title: title.into(),
             options: Some(options.into()),
-            qtype: Some("single".into()),
+            qtype: Some(
+                if answer == "对" || answer == "错" {
+                    "judgement"
+                } else if answer.contains('#') {
+                    "multiple"
+                } else {
+                    "single"
+                }
+                .into(),
+            ),
             answer: answer.into(),
         })
         .expect("写入失败");
@@ -1068,7 +1182,9 @@ mod tests {
             println!("库中 → options={:?} answer={:?}", r.options, r.answer);
         }
         assert_eq!(rows.len(), 2, "两道不同的题应当各占一行，不能被合并");
-        let hit = db.find_local("下列说法正确的是", OPT_A, 0.85).unwrap();
+        let hit = db
+            .find_local("下列说法正确的是", OPT_A, "single", 0.85)
+            .unwrap();
         let got = hit.as_ref().map(|(q, _)| q.answer.clone());
         println!("按 OPT_A 的选项查询 → 命中答案 {:?}（应为 A）", got);
         assert_eq!(got.as_deref(), Some("A"));
@@ -1081,7 +1197,9 @@ mod tests {
         let stored = "A. 甲\nB. 乙\nC. 丙\nD. 丁";
         let current = "A. 丙\nB. 甲\nC. 丁\nD. 乙";
         manual(&db, "下面说法正确的有", stored, "A#C");
-        let hit = db.find_local("下面说法正确的有", current, 0.85).unwrap();
+        let hit = db
+            .find_local("下面说法正确的有", current, "multiple", 0.85)
+            .unwrap();
         let got = hit.map(|(q, _)| q.answer);
         println!("乱序后 → {:?}（甲挪到 B、丙挪到 A，应为 B#A）", got);
         assert_eq!(got.as_deref(), Some("B#A"));
@@ -1092,8 +1210,13 @@ mod tests {
     fn different_options_should_not_hit() {
         let db = temp_db("diff");
         manual(&db, "下列说法正确的是", "A. 甲\nB. 乙", "A");
-        let hit = db.find_local("下列说法正确的是", "A. 苹果\nB. 香蕉", 0.85).unwrap();
-        println!("选项完全不同 → {:?}（应为 None）", hit.as_ref().map(|(q, _)| q.answer.clone()));
+        let hit = db
+            .find_local("下列说法正确的是", "A. 苹果\nB. 香蕉", "single", 0.85)
+            .unwrap();
+        println!(
+            "选项完全不同 → {:?}（应为 None）",
+            hit.as_ref().map(|(q, _)| q.answer.clone())
+        );
         assert!(hit.is_none());
     }
 
@@ -1104,9 +1227,12 @@ mod tests {
         let options = "个体对自己生命存在的肯定\n个人的社会存在\n个人通过劳动和创造,对社会所作的贡献\n社会对个人的尊重和满足";
         manual(&db, "下列关于社会价值正确的说法是", options, "C");
         let hit = db
-            .find_local("下列关于社会价值正确的说法为", options, 0.85)
+            .find_local("下列关于社会价值正确的说法为", options, "single", 0.85)
             .unwrap();
-        println!("近义题干 + 同选项 → {:?}", hit.as_ref().map(|(q, s)| (q.answer.clone(), *s)));
+        println!(
+            "近义题干 + 同选项 → {:?}",
+            hit.as_ref().map(|(q, s)| (q.answer.clone(), *s))
+        );
         assert_eq!(hit.map(|(q, _)| q.answer).as_deref(), Some("C"));
     }
 
@@ -1114,18 +1240,45 @@ mod tests {
     #[test]
     fn near_neighbour_judgement_must_not_cross_match() {
         let db = temp_db("near");
-        manual(&db, "人生目的是人生观的核心,在人生实践中具有重要的作用。", "对\n错", "对");
-        manual(&db, "人生态度是人生观的核心,在人生实践中具有重要的作用。", "对\n错", "错");
+        manual(
+            &db,
+            "人生目的是人生观的核心,在人生实践中具有重要的作用。",
+            "对\n错",
+            "对",
+        );
+        manual(
+            &db,
+            "人生态度是人生观的核心,在人生实践中具有重要的作用。",
+            "对\n错",
+            "错",
+        );
 
         let exact = db
-            .find_local("人生态度是人生观的核心,在人生实践中具有重要的作用。", "对\n错", 0.85)
+            .find_local(
+                "人生态度是人生观的核心,在人生实践中具有重要的作用。",
+                "对\n错",
+                "judgement",
+                0.85,
+            )
             .unwrap();
-        assert_eq!(exact.map(|(q, _)| q.answer).as_deref(), Some("错"), "逐字命中应取到本题答案");
+        assert_eq!(
+            exact.map(|(q, _)| q.answer).as_deref(),
+            Some("错"),
+            "逐字命中应取到本题答案"
+        );
 
         let near = db
-            .find_local("人生态度是人生观的核心,在人生实践中具有非常重要的作用。", "对\n错", 0.85)
+            .find_local(
+                "人生态度是人生观的核心,在人生实践中具有非常重要的作用。",
+                "对\n错",
+                "judgement",
+                0.85,
+            )
             .unwrap();
-        println!("近邻题干 → {:?}（应为 None，交给 AI）", near.as_ref().map(|(q, _)| q.answer.clone()));
+        println!(
+            "近邻题干 → {:?}（应为 None，交给 AI）",
+            near.as_ref().map(|(q, _)| q.answer.clone())
+        );
         assert!(near.is_none());
     }
 
@@ -1137,10 +1290,16 @@ mod tests {
         let query = "网络协议的三要素是语法、语义和顺序";
         manual(&db, stored, "", "对");
         let score = similarity(&normalize(query), &normalize(stored));
-        println!("相似度 = {:.3} ≥ 阈值 0.85，但答案是文本、没有选项可交叉验证", score);
+        println!(
+            "相似度 = {:.3} ≥ 阈值 0.85，但答案是文本、没有选项可交叉验证",
+            score
+        );
         assert!(score >= 0.85);
-        let hit = db.find_local(query, "", 0.85).unwrap();
-        println!("查询 → {:?}（应为 None）", hit.as_ref().map(|(q, _)| q.answer.clone()));
+        let hit = db.find_local(query, "", "judgement", 0.85).unwrap();
+        println!(
+            "查询 → {:?}（应为 None）",
+            hit.as_ref().map(|(q, _)| q.answer.clone())
+        );
         assert!(hit.is_none());
     }
 
@@ -1149,13 +1308,21 @@ mod tests {
     fn caching_same_question_twice_should_update_in_place() {
         let db = temp_db("dedupe");
         let options = "A. 甲\nB. 乙\nC. 丙";
-        let first = db.cache_question("下列说法", options, "single", "A", "t", "t").unwrap();
-        let second = db.cache_question("下列说法", options, "single", "B", "t", "t").unwrap();
+        let first = db
+            .cache_question("下列说法", options, "single", "A", "t", "t")
+            .unwrap();
+        let second = db
+            .cache_question("下列说法", options, "single", "B", "t", "t")
+            .unwrap();
         let n = db.list_questions(None, None, 1, 10).unwrap().items.len();
         println!("同题同选项缓存两次 → 行数={}，id={}/{}", n, first, second);
         assert_eq!(n, 1, "同题同选项不应产生重复行");
         assert_eq!(first, second, "应更新原来那一行");
-        let hit = db.find_local("下列说法", options, 0.85).unwrap().unwrap().0;
+        let hit = db
+            .find_local("下列说法", options, "single", 0.85)
+            .unwrap()
+            .unwrap()
+            .0;
         assert_eq!(hit.answer, "B", "答案应被更新");
     }
 
@@ -1165,17 +1332,136 @@ mod tests {
         let db = temp_db("dedupe-shuffle");
         let a = "A. 甲\nB. 乙\nC. 丙";
         let b = "A. 丙\nB. 甲\nC. 乙";
-        let first = db.cache_question("下列说法", a, "single", "B", "t", "t").unwrap();
-        let second = db.cache_question("下列说法", b, "single", "A", "t", "t").unwrap();
-        println!("选项乱序后再缓存 → 行数={}", db.list_questions(None, None, 1, 10).unwrap().items.len());
+        let first = db
+            .cache_question("下列说法", a, "single", "B", "t", "t")
+            .unwrap();
+        let second = db
+            .cache_question("下列说法", b, "single", "A", "t", "t")
+            .unwrap();
+        println!(
+            "选项乱序后再缓存 → 行数={}",
+            db.list_questions(None, None, 1, 10).unwrap().items.len()
+        );
         assert_eq!(first, second, "同一组选项只是顺序变了，应仍是同一行");
         assert_eq!(db.list_questions(None, None, 1, 10).unwrap().items.len(), 1);
 
-        let same = db.find_local("下列说法", b, 0.85).unwrap().unwrap().0;
+        let same = db
+            .find_local("下列说法", b, "single", 0.85)
+            .unwrap()
+            .unwrap()
+            .0;
         assert_eq!(same.answer, "A");
         // 换回最早那个顺序查询：丙 从 A 位挪到了 C 位，字母应跟着走
-        let back = db.find_local("下列说法", a, 0.85).unwrap().unwrap().0;
+        let back = db
+            .find_local("下列说法", a, "single", 0.85)
+            .unwrap()
+            .unwrap()
+            .0;
         println!("换回原选项顺序 → {}（丙 在 C 位，应为 C）", back.answer);
         assert_eq!(back.answer, "C");
+    }
+
+    #[test]
+    fn symbols_numbers_and_case_cannot_cross_match_even_fuzzily() {
+        let db = temp_db("semantic-symbols");
+        let options = "A. 3\nB. -1";
+        for (i, (a, b)) in [
+            ("1+2=?", "1-2=?"),
+            ("1.5", "15"),
+            ("x<2", "x>2"),
+            ("a+b", "a-b"),
+            ("X=1", "x=1"),
+        ]
+        .iter()
+        .enumerate()
+        {
+            assert_ne!(normalize(a), normalize(b));
+            let title = format!("这是一道有足够长题干的数学计算题{i}：{a}");
+            manual(&db, &title, options, "A");
+            let query = format!("这是一道有足够长题干的数学计算题{i}：{b}");
+            assert!(db
+                .find_local(&query, options, "single", 0.5)
+                .unwrap()
+                .is_none());
+        }
+        assert_ne!(option_signature("1.5\n2"), option_signature("5\n2"));
+        assert_ne!(
+            option_signature("A. 1+2\nB. 1-2"),
+            option_signature("A. 12\nB. 12")
+        );
+    }
+
+    #[test]
+    fn checks_all_options_type_and_ambiguous_mapping() {
+        let db = temp_db("full-options-type");
+        manual(&db, "题干", "A. 甲\nB. 乙", "A");
+        assert!(db
+            .find_local("题干", "A. 甲\nB. 丙", "single", 0.85)
+            .unwrap()
+            .is_none());
+        assert!(db
+            .find_local("题干", "A. 甲\nB. 乙", "multiple", 0.85)
+            .unwrap()
+            .is_none());
+        assert!(db
+            .find_local("题干", "A. 甲\nB. 乙", "unknown", 0.85)
+            .unwrap()
+            .is_none());
+        manual(&db, "文本答案", "A. 甲\nB. 乙", "甲");
+        assert!(db
+            .find_local("文本答案", "A. 甲\nB. 丙", "single", 0.85)
+            .unwrap()
+            .is_none());
+        assert!(db
+            .find_local("文本答案", "B. 乙\nA. 甲", "single", 0.85)
+            .unwrap()
+            .is_some());
+        manual(&db, "重复选项", "A. 甲\nB. 甲", "A");
+        assert!(db
+            .find_local("重复选项", "A. 甲\nB. 甲", "single", 0.85)
+            .unwrap()
+            .is_none());
+        let single = db
+            .cache_question("同题型键", OPT_A, "single", "A", "t", "t")
+            .unwrap();
+        let multiple = db
+            .cache_question("同题型键", OPT_A, "multiple", "A#B", "t", "t")
+            .unwrap();
+        assert_ne!(single, multiple);
+    }
+
+    #[test]
+    fn old_normalized_keys_are_rebuilt_once_without_changing_answers() {
+        let db = temp_db("key-migration");
+        manual(&db, "1+2=?", OPT_A, "A");
+        manual(&db, "1-2=?", OPT_A, "B");
+        {
+            let conn = db.lock().unwrap();
+            conn.execute("UPDATE questions SET normalized_title = '12'", [])
+                .unwrap();
+            conn.execute(
+                "DELETE FROM settings WHERE key = 'question_key_version'",
+                [],
+            )
+            .unwrap();
+        }
+        drop(db);
+        let path = std::env::temp_dir().join("ai2tiku-test-key-migration.db");
+        for _ in 0..2 {
+            let reopened = Db::open(&path).unwrap();
+            let plus = reopened
+                .find_local("1+2=?", OPT_A, "single", 0.85)
+                .unwrap()
+                .unwrap()
+                .0;
+            let minus = reopened
+                .find_local("1-2=?", OPT_A, "single", 0.85)
+                .unwrap()
+                .unwrap()
+                .0;
+            assert_eq!(plus.answer, "A");
+            assert_eq!(minus.answer, "B");
+            assert_eq!(reopened.list_questions(None, None, 1, 10).unwrap().total, 2);
+        }
     }
 }

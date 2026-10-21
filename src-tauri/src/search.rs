@@ -23,7 +23,7 @@ pub async fn answer(state: &AppState, q: &SearchQuery) -> SearchOutcome {
     if images.is_empty() {
         match state
             .db
-            .find_local(title, options, settings.match_threshold)
+            .find_local(title, options, &q.qtype, settings.match_threshold)
         {
             Ok(Some((hit, score))) => {
                 let _ = state.db.bump_hits(hit.id);

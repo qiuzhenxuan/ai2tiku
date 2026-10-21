@@ -16,6 +16,7 @@ const pageSize = 15;
 const keyword = ref("");
 const source = ref("");
 const loading = ref(false);
+const clearing = ref(false);
 
 const modal = ref(false);
 const form = reactive<QuestionInput>({ id: null, title: "", options: "", qtype: "single", answer: "" });
@@ -81,14 +82,19 @@ async function remove(item: Question) {
 }
 
 async function clearAll() {
-  if (!window.confirm(`清空全部 ${total.value} 道题？该操作不可撤销。`)) return;
+  if (clearing.value) return;
+  clearing.value = true;
   try {
+    const all = await api.listQuestions("", "", 1, 1);
+    if (!window.confirm(`清空整个题库？当前共有 ${all.total} 道题（包含未显示的题目，不受搜索词和来源筛选限制）。该操作不可撤销。`)) return;
     await api.clearQuestions();
     toast.ok("题库已清空");
     page.value = 1;
     await load();
   } catch (e) {
     toast.fromError(e);
+  } finally {
+    clearing.value = false;
   }
 }
 
@@ -173,7 +179,7 @@ onMounted(load);
           <span>共 {{ total }} 道 · 第 {{ page }} / {{ totalPages }} 页</span>
           <button class="btn btn--sm" type="button" :disabled="page <= 1" @click="go(-1)">上一页</button>
           <button class="btn btn--sm" type="button" :disabled="page >= totalPages" @click="go(1)">下一页</button>
-          <button class="btn btn--danger btn--sm" type="button" @click="clearAll">清空题库</button>
+          <button class="btn btn--danger btn--sm" type="button" :disabled="clearing" @click="clearAll">{{ clearing ? "处理中…" : "清空整个题库" }}</button>
         </div>
       </template>
     </div>

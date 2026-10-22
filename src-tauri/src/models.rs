@@ -259,3 +259,22 @@ pub struct SearchOutcome {
     pub duration_ms: i64,
     pub msg: Option<String>,
 }
+
+/// OCS 脚本的最新版本信息（运行时从 GitHub Releases 拉取）
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OcsRelease {
+    pub version: String,
+    pub published_at: String,
+    /// ocs.user.js 的下载地址，脚本管理器会自动弹安装页
+    pub script_url: String,
+}
+
+/// 浏览器环境检测结果（用于一键部署引导）
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BrowserInfo {
+    pub edge_installed: bool,
+    pub edge_default: bool,
+    pub default_browser: String,
+}

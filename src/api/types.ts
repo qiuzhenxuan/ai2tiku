@@ -98,6 +98,21 @@ export interface ServerStatus {
   address: string;
 }
 
+/** OCS 脚本最新版本（后端从 GitHub Releases 拉取） */
+export interface OcsRelease {
+  version: string;
+  publishedAt: string;
+  /** ocs.user.js 的下载地址 */
+  scriptUrl: string;
+}
+
+/** 本机浏览器环境检测结果 */
+export interface BrowserInfo {
+  edgeInstalled: boolean;
+  edgeDefault: boolean;
+  defaultBrowser: string;
+}
+
 /** 内置的常用供应商预设：选一个、填 Key 即可 */
 export interface ProviderPreset {
   id: string;

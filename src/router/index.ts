@@ -8,6 +8,12 @@ const routes = [
     meta: { title: "概览", desc: "本地 AI 题库的运行状态一览" },
   },
   {
+    path: "/deploy",
+    name: "deploy",
+    component: () => import("../views/DeployView.vue"),
+    meta: { title: "一键部署", desc: "把 OCS 脚本装进浏览器并接入本地题库" },
+  },
+  {
     path: "/ocs",
     name: "ocs",
     component: () => import("../views/OcsConfigView.vue"),

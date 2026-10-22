@@ -5,6 +5,7 @@ import AppIcon from "./AppIcon.vue";
 
 const ICON_MAP: Record<string, string> = {
   dashboard: "dashboard",
+  deploy: "rocket",
   ocs: "plug",
   providers: "sparkles",
   questions: "database",

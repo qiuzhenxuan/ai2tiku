@@ -188,6 +188,115 @@ pub fn list_provider_presets() -> Vec<ProviderPreset> {
     crate::presets::list()
 }
 
+// ---------- 一键部署 OCS ----------
+
+/// 拉取 OCS 脚本的最新 Release：安装按钮永远指向 GitHub 上的最新版
+#[tauri::command]
+pub async fn latest_ocs_release(state: State<'_, SharedState>) -> R<OcsRelease> {
+    let res = state
+        .client()
+        .get("https://api.github.com/repos/ocsjs/ocsjs/releases/latest")
+        .header("User-Agent", "ai2tiku")
+        .header("Accept", "application/vnd.github+json")
+        .send()
+        .await
+        .map_err(|e| format!("访问 GitHub 失败：{}", e))?;
+
+    if !res.status().is_success() {
+        return Err(format!("GitHub 返回 {}", res.status()));
+    }
+
+    let value: serde_json::Value = res.json().await.map_err(|e| e.to_string())?;
+    let version = value["tag_name"].as_str().unwrap_or_default().to_string();
+    let published_at = value["published_at"].as_str().unwrap_or_default().to_string();
+    let script_url = value["assets"]
+        .as_array()
+        .and_then(|assets| {
+            assets
+                .iter()
+                .find(|a| a["name"].as_str() == Some("ocs.user.js"))
+        })
+        .and_then(|a| a["browser_download_url"].as_str())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| {
+            format!(
+                "https://github.com/ocsjs/ocsjs/releases/download/{}/ocs.user.js",
+                version
+            )
+        });
+
+    Ok(OcsRelease {
+        version,
+        published_at,
+        script_url,
+    })
+}
+
+/// 检测本机浏览器环境（当前只支持 Edge，其它仅用于提示）
+#[tauri::command]
+pub fn browser_info() -> BrowserInfo {
+    let edge_paths = [
+        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+    ];
+    let edge_installed = edge_paths.iter().any(|p| std::path::Path::new(p).exists())
+        || reg_value(
+            r"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\msedge.exe",
+            "",
+        )
+        .is_some();
+
+    let prog_id = reg_value(
+        r"HKCU\Software\Microsoft\Windows\Shell\Associations\UrlAssociations\https\UserChoice",
+        "ProgId",
+    )
+    .unwrap_or_default();
+    let edge_default = prog_id.starts_with("MSEdge");
+    let default_browser = if edge_default {
+        "Edge"
+    } else if prog_id == "ChromeHTML" {
+        "Chrome"
+    } else if prog_id.starts_with("Firefox") {
+        "Firefox"
+    } else if prog_id.is_empty() {
+        "未知"
+    } else {
+        "其他浏览器"
+    }
+    .to_string();
+
+    BrowserInfo {
+        edge_installed,
+        edge_default,
+        default_browser,
+    }
+}
+
+/// 读注册表值。value 传空则读默认值；读不到返回 None
+#[cfg(windows)]
+fn reg_value(path: &str, value: &str) -> Option<String> {
+    use std::os::windows::process::CommandExt;
+    let mut cmd = std::process::Command::new("reg");
+    cmd.args(["query", path]);
+    if !value.is_empty() {
+        cmd.args(["/v", value]);
+    }
+    let out = cmd.creation_flags(0x0800_0000).output().ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&out.stdout);
+    text.lines()
+        .find(|l| l.contains("REG_SZ"))
+        .and_then(|l| l.split("REG_SZ").nth(1))
+        .map(|s| s.trim().to_string())
+}
+
+#[cfg(not(windows))]
+fn reg_value(_path: &str, _value: &str) -> Option<String> {
+    None
+}
+
 /// 用 base_url + api_key 试探供应商的可选模型列表
 #[tauri::command]
 pub async fn fetch_models(

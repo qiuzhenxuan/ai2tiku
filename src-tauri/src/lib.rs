@@ -56,6 +56,8 @@ pub fn run() {
             commands::server_status,
             commands::get_ui_pref,
             commands::set_ui_pref,
+            commands::latest_ocs_release,
+            commands::browser_info,
             commands::start_server,
             commands::stop_server,
             commands::list_providers,

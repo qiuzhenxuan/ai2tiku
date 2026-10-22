@@ -385,6 +385,11 @@ a {
 .rail__item--chart:is(:hover, :focus-visible) svg > :nth-child(2) { transform: scaleY(1.25); }
 .rail__item--chart:is(:hover, :focus-visible) svg > :nth-child(3) { transform: scaleY(1.15); }
 .rail__item--chart:is(:hover, :focus-visible) svg > :nth-child(4) { transform: scaleY(1.5); }
+.rail__item--rocket svg {
+  transform-origin: center;
+  transition: transform 420ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+.rail__item--rocket:is(:hover, :focus-visible) svg { transform: translate(1px, -1px) rotate(-8deg); }
 .rail__item:active svg { scale: 0.92; }
 
 /* 悬停展开的小卡片：宽度从 0 撑开，内容固定宽度不被挤压 */
@@ -573,6 +578,77 @@ a {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+/* ---------- 部署步骤 ---------- */
+
+.steps {
+  display: flex;
+  flex-direction: column;
+}
+
+.step {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px dashed var(--border);
+}
+
+.step:first-child {
+  padding-top: 0;
+}
+
+.step:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.step__num {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+
+.step__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.step__desc {
+  margin-top: 3px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+.step__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.step__meta {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--text-faint);
+  word-break: break-all;
+}
+
+.step .code {
+  margin-top: 10px;
 }
 
 .row--wrap {

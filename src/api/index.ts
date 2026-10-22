@@ -1,7 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   AiModel,
+  BrowserInfo,
   ModelInput,
+  OcsRelease,
   Page,
   Provider,
   ProviderInput,
@@ -30,6 +32,10 @@ export const api = {
   // 界面偏好（主题色等），存本地数据库，重启不丢
   getUiPref: (key: string) => invoke<string | null>("get_ui_pref", { key }),
   setUiPref: (key: string, value: string) => invoke<void>("set_ui_pref", { key, value }),
+
+  // 一键部署 OCS
+  latestOcsRelease: () => invoke<OcsRelease>("latest_ocs_release"),
+  browserInfo: () => invoke<BrowserInfo>("browser_info"),
 
   // 供应商
   listProviders: () => invoke<Provider[]>("list_providers"),

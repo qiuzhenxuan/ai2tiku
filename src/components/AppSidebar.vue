@@ -78,6 +78,15 @@ function moveFocus(event: KeyboardEvent) {
             @click="navigate"
           >
             <AppIcon :name="item.icon" :size="18" />
+
+            <!-- 火箭发射：向下喷出的粒子 -->
+            <span v-if="item.name === 'deploy'" class="rail__thrust" aria-hidden="true">
+              <i
+                v-for="(dx, i) in [-9, -5, -2, 2, 5, 9]"
+                :key="i"
+                :style="{ '--dx': `${dx}px`, '--d': `${i * 95}ms` }"
+              />
+            </span>
           </a>
 
           <div :id="`nav-tip-${item.name}`" class="rail__flyout" role="tooltip" :aria-hidden="!isOpen(item.name)">

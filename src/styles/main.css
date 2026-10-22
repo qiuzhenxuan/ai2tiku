@@ -324,6 +324,7 @@ a {
 }
 
 .rail__item {
+  position: relative;
   display: grid;
   place-items: center;
   width: 40px;
@@ -389,7 +390,69 @@ a {
   transform-origin: center;
   transition: transform 420ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }
-.rail__item--rocket:is(:hover, :focus-visible) svg { transform: translate(1px, -1px) rotate(-8deg); }
+
+/* 火箭：点火瞬间抖动 → 升空 → 空中持续小幅摇晃 */
+@keyframes rocket-launch {
+  0% { transform: translateY(0) rotate(0); }
+  6% { transform: translate(-1.5px, 0) rotate(-5deg); }
+  12% { transform: translate(1.5px, -0.5px) rotate(5deg); }
+  18% { transform: translate(-1.5px, -1px) rotate(-4deg); }
+  24% { transform: translate(1.5px, -1.5px) rotate(4deg); }
+  32% { transform: translateY(-3px) rotate(-3deg); }
+  42% { transform: translateY(-4px) rotate(3deg); }
+  55% { transform: translateY(-3.5px) rotate(-2deg); }
+  70% { transform: translateY(-4px) rotate(2deg); }
+  85% { transform: translateY(-3.5px) rotate(-1deg); }
+  100% { transform: translateY(-4px) rotate(0); }
+}
+
+.rail__item--rocket:is(:hover, :focus-visible) svg {
+  animation: rocket-launch 1.9s ease-in-out infinite;
+}
+
+/* 向下喷出的推进粒子 */
+.rail__thrust {
+  position: absolute;
+  left: 50%;
+  bottom: 7px;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 120ms var(--ease);
+}
+
+.rail__item--rocket:is(:hover, :focus-visible) .rail__thrust {
+  opacity: 1;
+}
+
+.rail__thrust i {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 3px;
+  height: 3px;
+  margin-left: -1.5px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 4px var(--accent);
+  opacity: 0;
+  animation: thrust-particle 880ms linear infinite;
+  animation-delay: var(--d);
+  animation-play-state: paused;
+}
+
+.rail__item--rocket:is(:hover, :focus-visible) .rail__thrust i {
+  animation-play-state: running;
+}
+
+@keyframes thrust-particle {
+  0% { transform: translate(0, 0) scale(0.5); opacity: 0; }
+  14% { opacity: 0.95; }
+  45% { opacity: 0.5; }
+  100% { transform: translate(var(--dx), 20px) scale(0.25); opacity: 0; }
+}
+
 .rail__item:active svg { scale: 0.92; }
 
 /* 悬停展开的小卡片：宽度从 0 撑开，内容固定宽度不被挤压 */
@@ -429,6 +492,7 @@ a {
 @media (prefers-reduced-motion: reduce) {
   .rail *, .rail *::before, .rail *::after { transition: none !important; animation: none !important; }
   .rail__item svg, .rail__item svg > *, .rail__flyout-inner { transform: none !important; scale: none !important; }
+  .rail__thrust { display: none !important; }
 }
 
 .rail__flyout-title {
@@ -616,6 +680,11 @@ a {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   user-select: none;
+}
+
+.step__num--done {
+  background: var(--success-soft);
+  color: var(--success);
 }
 
 .step__title {

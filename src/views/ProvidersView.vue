@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
+import { useRoute } from "vue-router";
 import { api } from "../api";
 import type {
   AiModel,
@@ -13,6 +14,7 @@ import AppModal from "../components/AppModal.vue";
 import { useToast } from "../composables/useToast";
 
 const toast = useToast();
+const route = useRoute();
 
 const providers = ref<Provider[]>([]);
 const models = ref<AiModel[]>([]);
@@ -188,7 +190,15 @@ async function test(item: Provider) {
   }
 }
 
-onMounted(load);
+onMounted(async () => {
+  await load();
+  // 从「一键部署」跳过来时带 ?add=zhipu，直接弹出新增框并选好预设
+  const add = route.query.add;
+  if (typeof add === "string" && presets.value.some((p) => p.id === add)) {
+    openProvider();
+    applyPreset(add);
+  }
+});
 </script>
 
 <template>

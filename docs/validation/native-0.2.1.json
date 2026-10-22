@@ -1,0 +1,44 @@
+{
+  "passed": true,
+  "screenshots": 71,
+  "pages": 8,
+  "dialogs": 4,
+  "monochromeSampleCheck": true,
+  "hoverAndReset": 8,
+  "keyboardFocus": 8,
+  "reducedMotion": true,
+  "stableNavigationBounds": true,
+  "sidebarStates": [
+    "collapsed",
+    "expanded"
+  ],
+  "rocketFrameCadence": {
+    "32": {
+      "averageFps": 240.00011028725706,
+      "maxFrameMs": 4.883500000000041,
+      "medianFrameMs": 4.166800000000137,
+      "over50ms": 0,
+      "p95FrameMs": 4.232299999999967,
+      "samples": 766
+    },
+    "53": {
+      "averageFps": 239.99463164949466,
+      "maxFrameMs": 4.304600000001102,
+      "medianFrameMs": 4.166099999999062,
+      "over50ms": 0,
+      "p95FrameMs": 4.2362000000011335,
+      "samples": 765
+    }
+  },
+  "imageSizes": [
+    [
+      1350,
+      900
+    ],
+    [
+      1830,
+      1230
+    ]
+  ],
+  "scope": "Native framebuffer with injected test input; isolated database; no paid model calls"
+}

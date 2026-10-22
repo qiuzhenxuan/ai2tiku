@@ -278,3 +278,19 @@ pub struct BrowserInfo {
     pub edge_default: bool,
     pub default_browser: String,
 }
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActiveModelInfo {
+    pub provider: String,
+    pub model: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeploymentStatus {
+    pub server: ServerStatus,
+    pub config: String,
+    pub ai_model: Option<ActiveModelInfo>,
+    pub ai_fallback: bool,
+}

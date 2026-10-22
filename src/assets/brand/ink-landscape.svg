@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 1000" fill="none">
+  <defs>
+    <linearGradient id="wash" x1="1050" y1="530" x2="1040" y2="1000" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4c4c4c" stop-opacity=".13"/>
+      <stop offset="1" stop-color="#4c4c4c" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="mist" x1="0" y1="710" x2="0" y2="1000" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#777" stop-opacity=".12"/>
+      <stop offset="1" stop-color="#777" stop-opacity=".01"/>
+    </linearGradient>
+    <filter id="soft" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="3"/></filter>
+    <filter id="ink" x="-5%" y="-5%" width="110%" height="110%">
+      <feTurbulence type="fractalNoise" baseFrequency=".025" numOctaves="3" seed="8" result="grain"/>
+      <feDisplacementMap in="SourceGraphic" in2="grain" scale="9" xChannelSelector="R" yChannelSelector="G"/>
+      <feGaussianBlur stdDeviation="1.3"/>
+    </filter>
+  </defs>
+  <!-- Distant mountains dissolve into paper; intentionally no marks behind the reading area. -->
+  <g filter="url(#ink)">
+    <path d="M410 1000C494 967 520 900 561 908C589 915 599 929 621 908C665 867 685 796 722 801C737 802 745 823 760 813C797 788 801 710 839 704C857 700 866 751 884 728C929 674 939 612 965 610C981 608 984 652 1000 624C1022 587 1029 550 1046 550C1064 551 1066 626 1086 627C1099 628 1105 599 1118 609C1154 636 1145 719 1177 719C1191 719 1204 677 1219 686C1254 708 1267 770 1298 761C1324 754 1331 718 1353 728C1401 751 1402 784 1440 779V1000Z" fill="url(#wash)"/>
+    <path d="M0 960C61 950 91 901 118 903C141 904 151 928 171 912C199 889 219 855 244 859C258 862 268 885 288 866C322 833 354 796 378 801C396 805 411 854 433 849C462 844 477 818 497 834C530 859 539 914 571 907C595 902 614 887 635 898C696 930 715 969 765 965C816 960 853 921 884 939C937 970 963 987 993 980C1042 970 1094 885 1123 893C1143 899 1150 923 1168 906C1200 876 1219 826 1243 828C1259 829 1270 857 1286 844C1312 822 1329 792 1349 795C1380 801 1407 843 1440 838V1000Z" fill="url(#mist)"/>
+  </g>
+  <g stroke="#555" stroke-linecap="round" filter="url(#ink)">
+    <path d="M1004 627C1027 592 1035 557 1046 554C1055 569 1058 594 1064 608M1049 574C1040 628 1060 660 1032 695M1219 689C1211 720 1227 741 1214 764" stroke-opacity=".065" stroke-width="4"/>
+    <path d="M37 977C219 955 274 990 441 972M781 985C936 969 1037 1001 1174 980" stroke-opacity=".055" stroke-width="2"/>
+  </g>
+  <ellipse cx="1433" cy="166" rx="155" ry="210" fill="#555" fill-opacity=".025" filter="url(#soft)"/>
+</svg>

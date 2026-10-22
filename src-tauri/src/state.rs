@@ -2,13 +2,15 @@ use crate::db::Db;
 use crate::server::ServerHandle;
 use std::sync::{Arc, Mutex, RwLock};
 
-/// 全局共享状态：HTTP 服务与 Tauri 命令都通过它访问同一个数据库
+/// 全局共享状态：原生界面、HTTP 服务与可选的 WebView 入口复用同一业务层。
 pub struct AppState {
     pub db: Arc<Db>,
     /// HTTP 客户端。代理设置变更时需要重建，所以放在 RwLock 里；
     /// reqwest::Client 内部是 Arc，取用时克隆一份很廉价。
     client: RwLock<reqwest::Client>,
     pub server: Mutex<ServerHandle>,
+    /// 串行化服务启停与配置切换，避免并发保存互相覆盖监听句柄。
+    pub lifecycle: Mutex<()>,
 }
 
 pub type SharedState = Arc<AppState>;
@@ -20,6 +22,7 @@ impl AppState {
             db: Arc::new(db),
             client: RwLock::new(crate::ai::build_client(&proxy)),
             server: Mutex::new(ServerHandle::default()),
+            lifecycle: Mutex::new(()),
         }
     }
 

@@ -27,9 +27,16 @@ pub async fn answer(state: &AppState, q: &SearchQuery) -> SearchOutcome {
         {
             Ok(Some((hit, score))) => {
                 let _ = state.db.bump_hits(hit.id);
-                let _ =
-                    state.db
-                        .add_record(title, &hit.answer, "cache", "", "", 0, 0, elapsed(started));
+                let _ = state.db.add_record(
+                    title,
+                    &hit.answer,
+                    "cache",
+                    "",
+                    "",
+                    0,
+                    0,
+                    elapsed(started),
+                );
                 return SearchOutcome {
                     code: 1,
                     question: Some(hit.title),
@@ -58,7 +65,12 @@ pub async fn answer(state: &AppState, q: &SearchQuery) -> SearchOutcome {
     }
     let active = match state.db.active_model() {
         Ok(Some(v)) => v,
-        Ok(None) => return fail("本地题库未命中，且没有启用中的 AI 模型，请先到「AI 供应商」页配置", started),
+        Ok(None) => {
+            return fail(
+                "本地题库未命中，且没有启用中的 AI 模型，请先到「AI 供应商」页配置",
+                started,
+            )
+        }
         Err(e) => return fail(&format!("读取 AI 配置失败：{}", e), started),
     };
     let (provider, model) = active;

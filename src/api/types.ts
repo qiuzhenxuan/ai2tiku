@@ -113,6 +113,13 @@ export interface BrowserInfo {
   defaultBrowser: string;
 }
 
+export interface DeploymentStatus {
+  server: ServerStatus;
+  config: string;
+  aiModel: { provider: string; model: string } | null;
+  aiFallback: boolean;
+}
+
 /** 内置的常用供应商预设：选一个、填 Key 即可 */
 export interface ProviderPreset {
   id: string;

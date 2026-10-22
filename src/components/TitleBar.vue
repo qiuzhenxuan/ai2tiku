@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from "vue";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import AppLogo from "./AppLogo.vue";
 
 /** 只有跑在 Tauri 里才有窗口 API，浏览器预览时全部跳过 */
 const win = (() => {
@@ -49,7 +50,7 @@ onUnmounted(() => unlisten?.());
 <template>
   <header class="titlebar">
     <div class="titlebar__drag" data-tauri-drag-region>
-      <span class="titlebar__mark">AI</span>
+      <span class="titlebar__mark" data-tauri-drag-region><AppLogo /></span>
       <span class="titlebar__title" data-tauri-drag-region>ai2tiku · AI 题库</span>
     </div>
 

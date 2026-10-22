@@ -20,14 +20,8 @@ pub fn normalize(input: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-// 模糊匹配不能绕过符号保护：数学符号、数字、英文变量的变化必须回退 AI。
-fn semantic_tokens(text: &str) -> String {
-    text.chars()
-        .filter(|c| !c.is_whitespace() && (c.is_ascii() || c.is_numeric() || !c.is_alphanumeric()))
-        .collect()
-}
-
 /// 归一化编辑距离相似度，范围 0..=1
+#[cfg(test)]
 pub fn similarity(a: &str, b: &str) -> f64 {
     if a.is_empty() && b.is_empty() {
         return 1.0;
@@ -48,17 +42,6 @@ pub fn similarity(a: &str, b: &str) -> f64 {
         std::mem::swap(&mut prev, &mut cur);
     }
     1.0 - prev[m] as f64 / n.max(m) as f64
-}
-
-/// 相似度 ≥ t 的必要条件：设查询串归一化长度为 n、库中题干为 m，
-/// 则 t·n ≤ m ≤ n/t。用它做候选预筛，不会漏掉任何真正达标的行。
-fn length_band(n: usize, t: f64) -> (i64, i64) {
-    if t <= 0.0 {
-        return (0, i64::MAX);
-    }
-    let lo = (t * n as f64).ceil() as i64;
-    let hi = (n as f64 / t).floor() as i64;
-    (lo.max(0), hi)
 }
 
 /// 去掉选项行首的编号（"A." / "A、xxx" / "(A) xxx" / "1. xxx" 等），返回正文。
@@ -377,7 +360,8 @@ impl Db {
     }
 
     pub fn save_settings(&self, s: &Settings) -> R<()> {
-        let conn = self.lock()?;
+        let mut conn = self.lock()?;
+        let tx = conn.transaction().map_err(err)?;
         let pairs = [
             ("port", s.port.to_string()),
             ("match_threshold", s.match_threshold.to_string()),
@@ -393,14 +377,14 @@ impl Db {
             ("proxy_url", s.proxy_url.clone()),
         ];
         for (k, v) in pairs {
-            conn.execute(
+            tx.execute(
                 "INSERT INTO settings(key, value) VALUES(?1, ?2)
                  ON CONFLICT(key) DO UPDATE SET value = excluded.value",
                 params![k, v],
             )
             .map_err(err)?;
         }
-        Ok(())
+        tx.commit().map_err(err)
     }
 
     // ---------- 界面偏好（主题色等） ----------
@@ -588,6 +572,16 @@ impl Db {
             return Ok(0);
         }
         let conn = self.lock()?;
+        let exists: bool = conn
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM providers WHERE id = ?1)",
+                [provider_id],
+                |r| r.get(0),
+            )
+            .map_err(err)?;
+        if !exists {
+            return Err("供应商已删除，未写入模型".into());
+        }
         let existing: Vec<String> = {
             let mut stmt = conn
                 .prepare("SELECT model FROM models WHERE provider_id = ?1")
@@ -692,7 +686,7 @@ impl Db {
     const Q_COLS: &'static str =
         "id, title, options, qtype, answer, source, provider, model, hits, created_at, updated_at";
 
-    /// 本地题库匹配：先精确命中，再模糊匹配取最高相似度。
+    /// 自动作答只使用精确匹配。字符相似不能证明题目语义一致。
     ///
     /// 选项参与判定（这一步很关键）：
     /// - 题干归一化后相同、但选项不同的题不算同一道题 —— 同一句「下列说法正确的是」
@@ -707,7 +701,7 @@ impl Db {
         title: &str,
         options: &str,
         qtype: &str,
-        threshold: f64,
+        _threshold: f64,
     ) -> R<Option<(Question, f64)>> {
         let key = normalize(title);
         if key.is_empty() {
@@ -737,61 +731,7 @@ impl Db {
             }
         }
 
-        // 2) 模糊匹配：先按长度区间筛出「可能达到阈值」的候选（不漏真命中），再逐条算归一化编辑距离。
-        //
-        //    模糊这条通道只对**选择题**开放，且要求选项集合完全一致，原因是：
-        //    「人生目的是人生观的核心…」与「人生态度是人生观的核心…」只差两个字，
-        //    相似度 0.917 却是一对答案相反的题；判断题的选项永远是「对/错」，
-        //    给不了任何区分信号。只看题干去容错，必然答错，所以宁可 miss 交给 AI。
-        let query_sig = option_signature(options);
-        let n = key.chars().count();
-        let (lo, hi) = length_band(n, threshold);
-        let sql_near = format!(
-            "SELECT {} FROM questions
-             WHERE length(normalized_title) BETWEEN ?1 AND ?2
-             ORDER BY abs(length(normalized_title) - ?3)
-             LIMIT 2000",
-            Self::Q_COLS
-        );
-        let candidates = {
-            let mut stmt = conn.prepare(&sql_near).map_err(err)?;
-            let rows = stmt
-                .query_map(params![lo, hi, n as i64], |r| Self::row_to_question(r))
-                .map_err(err)?
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(err)?;
-            rows
-        };
-
-        let mut best: Option<(Question, f64)> = None;
-        for q in candidates {
-            if !matches!(qtype, "single" | "multiple")
-                || q.qtype != qtype
-                || !is_letter_answer(&q.answer)
-                || query_sig.is_empty()
-            {
-                continue;
-            }
-            if option_signature(&q.options) != query_sig {
-                continue;
-            }
-            if semantic_tokens(&key) != semantic_tokens(&normalize(&q.title)) {
-                continue;
-            }
-            let score = similarity(&key, &normalize(&q.title));
-            if score < threshold {
-                continue;
-            }
-            let Some(answer) = answer_for_options(&q, options, qtype) else {
-                continue;
-            };
-            if best.as_ref().map(|(_, b)| score > *b).unwrap_or(true) {
-                let mut hit = q;
-                hit.answer = answer;
-                best = Some((hit, score));
-            }
-        }
-        Ok(best)
+        Ok(None)
     }
 
     pub fn list_questions(
@@ -1220,9 +1160,9 @@ mod tests {
         assert!(hit.is_none());
     }
 
-    /// 选择题：题干只差一点点、选项集合一致时，模糊匹配应该命中
+    /// 即使看起来是近义改写，也不将字符相似当作自动答题依据。
     #[test]
-    fn fuzzy_should_match_choice_with_same_options() {
+    fn changed_stem_with_same_options_must_not_hit() {
         let db = temp_db("fuzzy-choice");
         let options = "个体对自己生命存在的肯定\n个人的社会存在\n个人通过劳动和创造,对社会所作的贡献\n社会对个人的尊重和满足";
         manual(&db, "下列关于社会价值正确的说法是", options, "C");
@@ -1233,7 +1173,60 @@ mod tests {
             "近义题干 + 同选项 → {:?}",
             hit.as_ref().map(|(q, s)| (q.answer.clone(), *s))
         );
-        assert_eq!(hit.map(|(q, _)| q.answer).as_deref(), Some("C"));
+        assert!(hit.is_none());
+    }
+
+    #[test]
+    fn opposite_chinese_stems_never_reuse_cached_answers() {
+        let db = temp_db("opposite-chinese");
+        for (stored, query) in [
+            (
+                "下列关于网络协议的说法正确的是",
+                "下列关于网络协议的说法不正确的是",
+            ),
+            (
+                "温度增加时下列哪个参数发生变化",
+                "温度减少时下列哪个参数发生变化",
+            ),
+        ] {
+            manual(&db, stored, OPT_A, "A");
+            for threshold in [0.0, 0.5, 0.85, 1.0] {
+                assert!(db
+                    .find_local(query, OPT_A, "single", threshold)
+                    .unwrap()
+                    .is_none());
+            }
+            assert_eq!(
+                db.find_local(stored, OPT_A, "single", 0.85)
+                    .unwrap()
+                    .unwrap()
+                    .0
+                    .answer,
+                "A"
+            );
+        }
+    }
+
+    #[test]
+    fn failed_setting_write_rolls_back_all_fields() {
+        let db = temp_db("settings-transaction");
+        let original = db.settings().unwrap();
+        db.lock()
+            .unwrap()
+            .execute_batch(
+                "CREATE TRIGGER fail_settings BEFORE INSERT ON settings
+             WHEN NEW.key = 'system_prompt' BEGIN SELECT RAISE(ABORT, 'test failure'); END;",
+            )
+            .unwrap();
+        let mut next = original.clone();
+        next.port = 45678;
+        next.auto_cache = !original.auto_cache;
+        next.system_prompt = "new prompt".into();
+        assert!(db.save_settings(&next).is_err());
+        let unchanged = db.settings().unwrap();
+        assert_eq!(unchanged.port, original.port);
+        assert_eq!(unchanged.auto_cache, original.auto_cache);
+        assert_eq!(unchanged.system_prompt, original.system_prompt);
     }
 
     /// 判断题近邻：只差两个字的题干相似度能到 0.9，但答案是相反的，绝不能被模糊匹配吃掉

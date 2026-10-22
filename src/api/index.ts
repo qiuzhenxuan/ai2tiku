@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   AiModel,
   BrowserInfo,
+  DeploymentStatus,
   ModelInput,
   OcsRelease,
   Page,
@@ -36,6 +37,8 @@ export const api = {
   // 一键部署 OCS
   latestOcsRelease: () => invoke<OcsRelease>("latest_ocs_release"),
   browserInfo: () => invoke<BrowserInfo>("browser_info"),
+  openInEdge: (url: string) => invoke<void>("open_in_edge", { url }),
+  deploymentStatus: () => invoke<DeploymentStatus>("deployment_status"),
 
   // 供应商
   listProviders: () => invoke<Provider[]>("list_providers"),

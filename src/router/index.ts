@@ -47,7 +47,7 @@ const routes = [
     path: "/settings",
     name: "settings",
     component: () => import("../views/SettingsView.vue"),
-    meta: { title: "设置", desc: "端口、匹配阈值与答题行为" },
+    meta: { title: "设置", desc: "端口、缓存策略与答题行为" },
   },
 ];
 

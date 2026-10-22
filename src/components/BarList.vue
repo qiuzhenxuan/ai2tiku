@@ -68,7 +68,7 @@ defineProps<{
 .bar-item__fill {
   height: 100%;
   border-radius: var(--r-full);
-  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 60%, #7ad0ff));
+  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 55%, var(--surface)));
   transition: width 400ms var(--ease);
 }
 </style>

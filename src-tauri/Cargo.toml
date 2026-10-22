@@ -1,6 +1,6 @@
 [package]
 name = "ai2tiku"
-version = "0.1.8"
+version = "0.2.1"
 description = "AI 驱动的 OCS 题库服务：把大模型接入 OCS 网课助手"
 authors = ["ai2tiku"]
 edition = "2021"
@@ -10,13 +10,23 @@ edition = "2021"
 name = "ai2tiku_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[features]
+default = ["native"]
+native = ["dep:eframe", "dep:image", "dep:dirs", "dep:arboard"]
+webview = ["dep:tauri", "dep:tauri-plugin-opener", "dep:tauri-plugin-clipboard-manager", "dep:tauri-build"]
+
 [build-dependencies]
-tauri-build = { version = "2", features = [] }
+tauri-build = { version = "2", features = [], optional = true }
+tauri-winres = "0.3.6"
 
 [dependencies]
-tauri = { version = "2", features = [] }
-tauri-plugin-opener = "2"
-tauri-plugin-clipboard-manager = "2"
+tauri = { version = "2", features = [], optional = true }
+tauri-plugin-opener = { version = "2", optional = true }
+tauri-plugin-clipboard-manager = { version = "2", optional = true }
+eframe = { version = "=0.33.3", default-features = false, features = ["accesskit", "default_fonts", "glow", "x11", "wayland"], optional = true }
+image = { version = "0.25", default-features = false, features = ["png"], optional = true }
+dirs = { version = "7", optional = true }
+arboard = { version = "3.7", default-features = false, optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync", "time"] }

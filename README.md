@@ -2,9 +2,9 @@
 
 把大模型接入 **OCS 网课助手** 的本地 AI 题库。
 
-ai2tiku 是一个基于 **Tauri 2 + Vue 3** 的桌面应用：它在你本机跑起一个题库接口，
+ai2tiku 是一个基于 **Rust + egui/eframe** 的原生桌面应用，界面直接绘制为桌面窗口，默认构建不依赖 WebView、HTML、CSS、Node 或 pnpm。它在你本机跑起一个题库接口，
 OCS 脚本通过标准的「题库配置」调用它。**先用本地题库匹配，未命中再交给 AI 作答**，
-开启自动缓存后，通过格式校验的纯文本题答案会写入题库；题干、题型与完整选项符合匹配条件时，
+开启自动缓存后，通过格式校验的纯文本题答案会写入题库；题干精确匹配、题型与完整选项一致时，
 可复用本地答案、不再消耗 Token。图片题不使用文本缓存。
 
 > 设计目标与 [Miaozeqiu/ZError](https://github.com/Miaozeqiu/ZError) 类似：
@@ -12,79 +12,100 @@ OCS 脚本通过标准的「题库配置」调用它。**先用本地题库匹�
 
 ## 更新记录
 
-2026-10-21：补齐 7 个侧栏图标动效和键盘交互，修复数学符号误匹配、选项核对不完整、
-AI 不确定回复被误解析为答案的问题，并明确筛选状态下清空整个题库的提示。
-详细变化、升级说明与验证结果见 [更新日志](CHANGELOG.md)。本轮尚未创建新的 Release。
+2026-10-22（v0.2.1，Windows 双版本）：部署流程改为复制完整 JSON，补齐 Edge 用户脚本权限引导，
+修复部署状态误判、反向题干缓存误命中及端口切换失败影响旧服务的问题，并修正火箭图标与粒子方向。
+新增无限墨环 Logo 与桌面图标，默认黑白配色，背景采用淡墨山形与纸张纹理。
+界面重写为 Rust 原生窗口：完整文字侧栏、统一页头、卡片、表格和表单；无限标志更换为带飞白与不规则笔触的毛笔图像。原数据库位置与答题规则保持兼容。
+详细变化、升级说明与验证结果见 [更新日志](CHANGELOG.md)。
 
 ## 功能
 
 - **内置常用供应商预设** —— 智谱 / DeepSeek / 通义千问 / Kimi / 混元 / 火山方舟 / 星火 / 千帆 / MiniMax / OpenAI / Ollama，选中后**只需填 API Key**
 - **保存供应商自动获取可用模型** —— 自动请求 `/models` 拉取该厂商的模型并填入，无需手抄模型名
-- **OCS 题库配置一键生成** —— 支持「订阅链接」与「JSON 字符串」两种填法
+- **OCS 题库配置一键生成** —— 复制完整 JSON，粘贴到 OCS 的题库配置中
+- **部署引导** —— 安装步骤统一使用 Edge，包含脚本猫「允许用户脚本」和旧版开发人员模式指引
 - **支持 OCS 5.0 图片题优化** —— 题库配置声明了 `${images}` 等参数，题干/选项里的图片
   会以 base64 传给模型（图片题需改用支持视觉的模型，如 glm-4.5v、qwen-vl-max）
 - **AI 供应商与模型自定义** —— 任何 OpenAI 兼容服务，可增删模型、设默认、测连通性
-- **本地题库管理与缓存** —— 按题型与完整选项校验缓存命中，支持增删改查和乱序选项映射
+- **本地题库管理与缓存** —— 精确核对题干、题型和完整选项，支持增删改查和乱序选项映射
 - **答案格式校验** —— 按题型检查答案格式、选项范围和回复完整性，失败结果不作为有效答案缓存
 - **答题记录** —— 查看已记录请求的来源、模型、耗时与 Token；部分失败路径尚未留痕
 - **统计看板** —— 缓存命中率、Token 消耗趋势、按模型用量分布
-- **日夜双主题** —— 浅色 / 深色两套配色，跟随系统或手动切换
-- **侧栏交互** —— 7 个图标独立动效，支持键盘导航、聚焦提示、Escape 收起和减少动态效果
+- **水墨视觉** —— 毛笔无限标志统一桌面图标与应用 Logo；黑白日夜配色，原生淡墨山形与纸张纤维背景
+- **侧栏交互** —— 默认图标栏，点击展开文字菜单；独立动效与连续喷流的竖直火箭，支持键盘聚焦和减少动态效果
+- **控件反馈** —— 黑白悬停、按下与焦点状态，可点击控件显示手型；统一按钮和单行表单尺寸
 - **默认强制直连** —— 不受本机代理软件的系统代理影响；需要访问 OpenAI 等被墙服务时可在「设置」里单独填代理
 
 ## 截图
+
+Rust 原生窗口的黑白水墨主题（演示数据）：
 
 | 概览 | OCS 题库配置 |
 | --- | --- |
 | ![概览](docs/screenshots/dashboard.png) | ![OCS 题库配置](docs/screenshots/ocs.png) |
 
+| 本地题库 | 夜间概览 |
+| --- | --- |
+| ![本地题库](docs/screenshots/questions.png) | ![夜间概览](docs/screenshots/dashboard-dark.png) |
+
+侧栏默认显示图标，点击顶部展开按钮可查看文字菜单：[展开效果](docs/screenshots/questions-expanded.png)。本地 0.2.1 Release 的 38 项 Rust 测试、71 张原生截图与动画帧间隔见 [原生验证记录](docs/native-validation-0.2.1.md)。
+
 ## 技术栈
 
 | 层 | 选型 |
 | --- | --- |
-| 桌面容器 | Tauri 2 |
-| 后端 | Rust + axum（本地 HTTP 服务）+ rusqlite（SQLite 存储） |
-| 前端 | Vue 3 + TypeScript + Vite + vue-router |
-| 样式 | 原生 CSS + CSS 变量驱动的日夜双主题 |
+| 桌面界面 | Rust + egui/eframe，Glow 原生渲染 |
+| 本地服务 | Rust + axum + Tokio |
+| 存储 | rusqlite / SQLite，复用原应用数据库 |
+| 视觉 | Rust 绘制的黑白日夜主题、图标动效与水墨背景；毛笔 Logo 使用 PNG 纹理 |
+| 兼容入口 | 旧 Vue + Tauri 界面保留为可选 `webview` feature，默认不编译 |
 
 ## 下载
 
-不想自己编译的话，去 [Releases](https://github.com/qiuzhenxuan/ai2tiku/releases) 下载
-`ai2tiku.exe`（单文件，前端资源已打包进去），双击即可运行，无需安装。
+去 [v0.2.1 Release](https://github.com/qiuzhenxuan/ai2tiku/releases/tag/v0.2.1) 选择其中一个 Windows x64 版本：
 
-- 需要 Windows 10/11；Win11 与大部分 Win10 已自带 WebView2 运行时，系统较旧时需先装
-  [WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)
+| 文件 | 界面与运行要求 |
+| --- | --- |
+| [ai2tiku-native-windows-x64.exe](https://github.com/qiuzhenxuan/ai2tiku/releases/download/v0.2.1/ai2tiku-native-windows-x64.exe) | Rust 原生界面，默认折叠菜单、连续火箭尾焰，不需要 WebView2 |
+| [ai2tiku-webview-windows-x64.exe](https://github.com/qiuzhenxuan/ai2tiku/releases/download/v0.2.1/ai2tiku-webview-windows-x64.exe) | 保留 Vue + Tauri 界面，需要 WebView2 Runtime |
+
+两版共用业务模块和原数据库。新增折叠菜单、密集尾焰与控件反馈在原生版中提供；WebView 版保留之前的界面。升级前先退出正在运行的版本，同一端口不要同时运行两版。Release 同时提供每个 EXE 的 `.sha256` 和汇总 `SHA256SUMS.txt`。
+
+- 原生版面向 Windows 10/11，不需要 WebView2 运行时
 - exe 未做代码签名，首次运行 Windows 可能提示"未知发布者"，点"仍要运行"即可
 - 每次运行会自动在 `%APPDATA%\com.ai2tiku.app` 下建库，你的 API Key 只存在本机
 
 ## 运行
 
-前置要求：Node 18+、pnpm、Rust stable 工具链，Windows 上还需要 MSVC 生成工具。
+前置要求：Rust stable 与 MSVC 生成工具。默认原生构建不需要安装前端依赖。
 
 ```bash
-pnpm install
-pnpm tauri dev     # 开发模式
-pnpm tauri build   # 打包
-pnpm tauri build --no-bundle  # 仅生成可运行程序，不制作安装包
+cargo run --manifest-path src-tauri/Cargo.toml
+cargo test --manifest-path src-tauri/Cargo.toml --locked --lib
+cargo build --manifest-path src-tauri/Cargo.toml --release --locked
 ```
 
 Windows 单文件程序位于 `src-tauri/target/release/ai2tiku.exe`。
 
-仅调试前端界面（不含本地服务）：
+如需对照旧 WebView 版本，显式选择兼容入口（需要 Node 与 pnpm）：
 
 ```bash
-pnpm dev
+pnpm install
+pnpm build
+cargo run --manifest-path src-tauri/Cargo.toml --no-default-features --features webview
 ```
 
 ## 接入 OCS
 
-1. 打开软件，进入「AI 供应商与模型」，在「新增供应商」里**选一个预置厂商**，填上你的 API Key，
-   保存后会**自动拉取该厂商的可用模型并填入**（第一个会自动设为默认）。
-2. 进入「OCS 题库配置」，任选一种方式接入：
-   - 复制 **订阅链接**（`http://127.0.0.1:3100/ocs`）——以后改端口或换模型都不用再动 OCS；
-   - 或复制 **JSON 配置** 粘贴进去。
-3. 打开 OCS 脚本的「题库配置」，填入并保存。
-4. 回到网课页面开启自动答题。
+1. 在「部署向导」中使用 Edge 安装脚本猫。打开 `edge://extensions/`，进入脚本猫详情，
+   开启「允许用户脚本」；旧版或没有这个选项时开启「开发人员模式」。重新启用扩展或重启浏览器后再刷新网课页面。
+   操作图解见 [脚本猫官方说明](https://docs.scriptcat.org/docs/use/open-dev/?browser=edge)。
+2. 安装 OCS 脚本，在「供应商与模型」中填写 Key，保存并启用供应商和需要的对话模型。
+   自动获取模型列表后，请通过本地自测确认所选模型与调用权限可用。
+3. 启动本地服务，在「部署向导」或「OCS 接入」页复制**完整 JSON 内容**，粘贴到 OCS 的题库配置并保存。
+   最新版 OCS 已不支持将远程链接作为题库配置。更改端口后需要重新复制 JSON；切换模型不需要。
+4. 在 OCS 中发起一次实际搜题，在「答题记录」中核对对应题目与返回结果。
+   出现 OCS 悬浮面板只代表脚本加载，本地自测成功也不能代替浏览器接入验证。
 
 生成的配置形如：
 
@@ -130,7 +151,7 @@ GET  /api/search?title=...&type=...&options=...
 POST /api/search   {"title":"...","type":"single","options":"A. xx\nB. yy"}
                    # 图片题另带 images（base64 数组）/ suggestion_title / suggestion_options
 GET  /api/status
-GET  /ocs          # OCS 订阅链接：返回题库配置 JSON
+GET  /ocs          # 导出题库配置 JSON 内容；新版 OCS 不能直接填此链接
 ```
 
 命中返回：
@@ -157,22 +178,25 @@ GET  /ocs          # OCS 订阅链接：返回题库配置 JSON
 ## 目录结构
 
 ```
-├── src/                     # Vue 前端
+├── src/                     # 可选的旧 Vue 界面与共享品牌图像
 │   ├── api/                 # Tauri 命令封装与类型
 │   ├── components/          # 通用组件
 │   ├── composables/         # 主题、提示
 │   ├── views/               # 页面
 │   └── styles/main.css      # 设计系统（含日夜双主题变量）
-└── src-tauri/               # Rust 后端
+└── src-tauri/               # Rust 原生应用与共享业务层（保留原目录名）
     └── src/
+        ├── native/          # 原生窗口、页面、布局、表单、动效与视觉验证
+        ├── services.rs      # 与界面无关的业务操作
         ├── ai.rs            # OpenAI 兼容调用（作答 / 拉取模型 / 测连通性）
         ├── answers.rs       # 按题型解析与校验答案，拒绝无效或截断回复
         ├── db.rs            # SQLite 存储与题库匹配
         ├── presets.rs       # 内置的常用供应商预设
-        ├── ocs.rs           # OCS 题库配置的唯一来源（JSON 与订阅链接共用）
-        ├── server.rs        # 本地 HTTP 服务（含 /ocs 订阅端点）
+        ├── ocs.rs           # OCS 题库 JSON 配置的唯一来源
+        ├── browser.rs       # Edge 定向打开部署链接与浏览器检测
+        ├── server.rs        # 本地 HTTP 服务（含 /ocs JSON 导出端点）
         ├── search.rs        # 缓存优先 + AI 兜底的核心流程
-        └── commands.rs      # 暴露给前端的命令
+        └── commands.rs      # 可选 WebView 兼容入口的命令
 ```
 
 ## 许可

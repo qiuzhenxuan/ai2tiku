@@ -1,0 +1,22 @@
+{
+  "passed": true,
+  "screenshots": 61,
+  "pages": 8,
+  "dialogs": 4,
+  "monochromeSampleCheck": true,
+  "hoverAndReset": 8,
+  "keyboardFocus": 8,
+  "reducedMotion": true,
+  "stableNavigationBounds": true,
+  "imageSizes": [
+    [
+      1350,
+      900
+    ],
+    [
+      1830,
+      1230
+    ]
+  ],
+  "scope": "Native framebuffer with injected test input; isolated database; no paid model calls"
+}

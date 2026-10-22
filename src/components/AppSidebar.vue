@@ -2,6 +2,7 @@
 import { ref } from "vue";
 import { routes } from "../router";
 import AppIcon from "./AppIcon.vue";
+import AppLogo from "./AppLogo.vue";
 
 const ICON_MAP: Record<string, string> = {
   dashboard: "dashboard",
@@ -50,7 +51,7 @@ function moveFocus(event: KeyboardEvent) {
 
 <template>
   <aside class="rail">
-    <div class="rail__brand" title="ai2tiku · OCS 智能题库">AI</div>
+    <div class="rail__brand" title="ai2tiku · OCS 智能题库" aria-label="ai2tiku · 无限墨环"><AppLogo /></div>
 
     <nav class="rail__nav" aria-label="主导航" @keydown="moveFocus" @keydown.esc="dismissed = true">
       <RouterLink
@@ -77,16 +78,18 @@ function moveFocus(event: KeyboardEvent) {
             @blur="focused = ''"
             @click="navigate"
           >
-            <AppIcon :name="item.icon" :size="18" />
-
-            <!-- 火箭发射：向下喷出的粒子 -->
-            <span v-if="item.name === 'deploy'" class="rail__thrust" aria-hidden="true">
-              <i
-                v-for="(dx, i) in [-9, -5, -2, 2, 5, 9]"
-                :key="i"
-                :style="{ '--dx': `${dx}px`, '--d': `${i * 95}ms` }"
-              />
+            <!-- 火箭与喷口共用坐标系，升空时粒子始终从尾部发出。 -->
+            <span v-if="item.name === 'deploy'" class="rail__rocket" aria-hidden="true">
+              <AppIcon :name="item.icon" :size="18" />
+              <span class="rail__thrust">
+                <i
+                  v-for="(dx, i) in [-3, -1.5, -0.5, 0.5, 1.5, 3]"
+                  :key="i"
+                  :style="{ '--dx': `${dx}px`, '--d': `${-i * 137}ms` }"
+                />
+              </span>
             </span>
+            <AppIcon v-else :name="item.icon" :size="18" />
           </a>
 
           <div :id="`nav-tip-${item.name}`" class="rail__flyout" role="tooltip" :aria-hidden="!isOpen(item.name)">

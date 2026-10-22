@@ -2,6 +2,7 @@ import { ref } from "vue";
 import { api } from "../api";
 
 export type AccentId =
+  | "ink"
   | "blue"
   | "purple"
   | "green"
@@ -22,6 +23,7 @@ export interface AccentPreset {
 
 /** 参考 ChatGPT 手机端的强调色自选：一排色点，点一下立即生效 */
 export const ACCENT_PRESETS: AccentPreset[] = [
+  { id: "ink", label: "水墨黑白 · 默认", light: "#202020", dark: "#eeeeee" },
   { id: "blue", label: "靛蓝", light: "#2f6fd0", dark: "#7d92ff" },
   { id: "purple", label: "罗兰紫", light: "#7c4dff", dark: "#a98bff" },
   { id: "green", label: "森林绿", light: "#0f7b45", dark: "#4cd27e" },
@@ -45,7 +47,7 @@ function cached(): AccentId | null {
   return isAccentId(saved) ? saved : null;
 }
 
-const accent = ref<AccentId>(cached() ?? "blue");
+const accent = ref<AccentId>(cached() ?? "ink");
 
 function apply(id: AccentId) {
   document.documentElement.dataset.accent = id;

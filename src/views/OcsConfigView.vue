@@ -1,16 +1,15 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { ref } from "vue";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { api } from "../api";
-import type { SearchOutcome, ServerStatus, Settings } from "../api/types";
+import type { SearchOutcome } from "../api/types";
 import AppIcon from "../components/AppIcon.vue";
 import { useToast } from "../composables/useToast";
 import { sourceLabel } from "../utils/format";
+import { useOcsConnection } from "../composables/useOcsConnection";
 
 const toast = useToast();
-const config = ref("");
-const settings = ref<Settings | null>(null);
-const status = ref<ServerStatus | null>(null);
+const { config, server: status, address, canCopy, busy, loading, error, refresh, copyConfig, startServer } = useOcsConnection();
 
 const testTitle = ref("1 + 1 = ?");
 const testType = ref("single");
@@ -18,25 +17,11 @@ const testOptions = ref("A. 1\nB. 2\nC. 3\nD. 4");
 const testing = ref(false);
 const result = ref<SearchOutcome | null>(null);
 
-async function load() {
+async function copyAddress() {
   try {
-    const [cfg, st, set] = await Promise.all([
-      api.buildOcsConfig(),
-      api.serverStatus(),
-      api.getSettings(),
-    ]);
-    config.value = cfg;
-    status.value = st;
-    settings.value = set;
-  } catch (e) {
-    toast.fromError(e);
-  }
-}
-
-async function copy(text: string, label: string) {
-  try {
-    await writeText(text);
-    toast.ok(`${label}已复制到剪贴板`);
+    if (!await refresh() || !canCopy.value) throw new Error("本地服务未就绪，请先启动服务");
+    await writeText(`${address.value}/api/search`);
+    toast.ok("接口地址已复制到剪贴板");
   } catch (e) {
     toast.fromError(e);
   }
@@ -58,7 +43,10 @@ async function runTest() {
   }
 }
 
-onMounted(load);
+async function openPermissions() {
+  try { await api.openInEdge("https://docs.scriptcat.org/docs/use/open-dev/?browser=edge"); }
+  catch (e) { toast.fromError(e); }
+}
 </script>
 
 <template>
@@ -72,6 +60,13 @@ onMounted(load);
         否则会出现跨域失败。本服务只监听 <code class="mono">127.0.0.1</code>，不会对外网暴露。
       </div>
     </div>
+    <div v-if="error" class="callout callout--warn">{{ error }} <button class="btn btn--sm" type="button" @click="refresh">重试</button></div>
+    <div class="callout callout--info">
+      <AppIcon name="info" :size="16" />
+      <div>脚本猫还需要开启「允许用户脚本」；没有该选项时开启 Edge 扩展页的「开发人员模式」，再重新启用扩展或重启浏览器。
+        <button class="btn btn--sm" type="button" @click="openPermissions">查看权限设置图解</button>
+      </div>
+    </div>
 
     <div class="grid grid--2">
       <div class="card">
@@ -80,16 +75,18 @@ onMounted(load);
           <span class="card__title">接口地址</span>
         </div>
         <div class="card__body stack">
-          <div class="code">{{ status?.address ?? "http://127.0.0.1" }}/api/search</div>
+          <div class="code">{{ address ? `${address}/api/search` : "正在读取接口地址…" }}</div>
           <div class="row row--wrap">
             <button
               class="btn"
               type="button"
-              @click="copy(`${status?.address ?? ''}/api/search`, '接口地址')"
+              :disabled="!canCopy || busy"
+              @click="copyAddress"
             >
               <AppIcon name="copy" :size="14" />
               复制地址
             </button>
+            <button v-if="!status?.running" class="btn" type="button" :disabled="busy || loading" @click="startServer">启动本地服务</button>
             <span class="badge" :class="status?.running ? 'badge--ok' : 'badge--off'">
               <span class="dot" :class="{ 'dot--pulse': status?.running }" />
               {{ status?.running ? "运行中" : "已停止" }}
@@ -110,8 +107,8 @@ onMounted(load);
         </div>
         <div class="card__body stack" style="gap: 10px">
           <div class="step"><span class="step__idx">1</span>打开 OCS 脚本设置，找到「题库配置」。</div>
-          <div class="step"><span class="step__idx">2</span>把订阅链接或下面的 JSON 填进去并保存。</div>
-          <div class="step"><span class="step__idx">3</span>回到网课页面，开启自动答题即可。</div>
+          <div class="step"><span class="step__idx">2</span>复制下面的完整 JSON 内容，粘贴到题库配置并保存。不要粘贴订阅链接。</div>
+          <div class="step"><span class="step__idx">3</span>在 OCS 中发起实际搜题，核对「答题记录」中的对应题目和结果。</div>
           <div class="step"><span class="step__idx">4</span>本题库会先用本地缓存命中，未命中再交给 AI 作答。</div>
         </div>
       </div>
@@ -119,38 +116,16 @@ onMounted(load);
 
     <div class="card">
       <div class="card__head">
-        <AppIcon name="globe" :size="15" />
-        <span class="card__title">订阅链接（推荐，最省事）</span>
-        <button
-          class="btn btn--primary btn--sm"
-          style="margin-left: auto"
-          type="button"
-          @click="copy(`${status?.address ?? ''}/ocs`, '订阅链接')"
-        >
-          <AppIcon name="copy" :size="13" />
-          复制链接
-        </button>
-      </div>
-      <div class="card__body stack">
-        <div class="code">{{ status?.address ?? "http://127.0.0.1" }}/ocs</div>
-        <p class="faint small">
-          OCS 的题库配置既支持粘贴下面那段 JSON，<strong>也支持填一个「订阅链接」</strong>——
-          打开后返回同样格式即可。所以你也可以直接把这个地址填进题库配置，以后改端口或换模型都不用再动 OCS。
-        </p>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card__head">
         <AppIcon name="copy" :size="15" />
         <span class="card__title">题库配置 JSON（粘贴给 OCS）</span>
-        <button class="btn btn--primary btn--sm" style="margin-left: auto" type="button" @click="copy(config, '题库配置')">
+        <button class="btn btn--primary btn--sm" style="margin-left: auto" type="button" :disabled="!canCopy || busy" @click="copyConfig">
           <AppIcon name="copy" :size="13" />
           复制配置
         </button>
       </div>
       <div class="card__body">
         <div class="code">{{ config }}</div>
+        <p class="faint small">更改监听端口后，需要重新复制 JSON 并在 OCS 中保存。模型切换不需要重新复制配置。</p>
       </div>
     </div>
 

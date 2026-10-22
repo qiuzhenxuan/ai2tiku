@@ -1,18 +1,38 @@
 mod ai;
+#[cfg(not(any(feature = "native", feature = "webview")))]
+compile_error!("请启用 native 或 webview 功能，默认使用 native 原生界面");
 mod answers;
+mod browser;
+#[cfg(feature = "webview")]
 mod commands;
 mod db;
 mod models;
+#[cfg(feature = "native")]
+mod native;
 mod ocs;
 mod presets;
 mod search;
 mod server;
+mod services;
 mod state;
 
+#[cfg(feature = "webview")]
 use state::{AppState, SharedState};
+#[cfg(feature = "webview")]
 use std::sync::Arc;
+#[cfg(feature = "webview")]
 use tauri::Manager;
 
+#[cfg(not(feature = "webview"))]
+pub fn run() {
+    #[cfg(feature = "native")]
+    if let Err(error) = native::run() {
+        eprintln!("启动失败：{error}");
+        std::process::exit(1);
+    }
+}
+
+#[cfg(feature = "webview")]
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -58,6 +78,8 @@ pub fn run() {
             commands::set_ui_pref,
             commands::latest_ocs_release,
             commands::browser_info,
+            commands::open_in_edge,
+            commands::deployment_status,
             commands::start_server,
             commands::stop_server,
             commands::list_providers,

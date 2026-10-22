@@ -3,8 +3,7 @@ use serde_json::{json, Value};
 /// OCS「题库配置」的唯一来源。
 /// 同时供两个地方使用：
 ///   1. 前端「OCS 题库配置」页展示 / 复制
-///   2. 本地服务 `GET /ocs` 订阅链接（OCS 官方支持填订阅链接，
-///      打开后返回这段 JSON 即可，比整段粘贴更省事）
+///   2. 本地服务 `GET /ocs` 导出端点。新版 OCS 需粘贴返回的 JSON 内容。
 pub fn config_value(port: u16) -> Value {
     let base = crate::server::address(port);
     json!([

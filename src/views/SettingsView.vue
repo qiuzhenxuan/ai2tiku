@@ -108,7 +108,7 @@ onMounted(load);
       <div class="card__head">
         <AppIcon name="sun" :size="15" />
         <span class="card__title">主题色</span>
-        <span class="card__hint">点击立即生效，只改强调色，不影响日间 / 夜间</span>
+        <span class="card__hint">默认水墨黑白，也可自选强调色；日间 / 夜间独立切换</span>
       </div>
       <div class="card__body">
         <div class="swatches">
@@ -195,22 +195,9 @@ onMounted(load);
         <span class="card__title">题库匹配与作答</span>
       </div>
       <div class="card__body stack">
-        <div class="field" style="max-width: 420px">
-          <label class="field__label" for="s-threshold">
-            模糊匹配阈值 <span class="mono">{{ form.matchThreshold.toFixed(2) }}</span>
-          </label>
-          <input
-            id="s-threshold"
-            v-model.number="form.matchThreshold"
-            type="range"
-            min="0.5"
-            max="1"
-            step="0.01"
-            style="width: 100%; accent-color: var(--accent)"
-          />
-          <span class="field__help">
-            越低越容易命中缓存，但误答风险也更高。建议 0.80 ~ 0.92
-          </span>
+        <div class="field" style="max-width: 520px">
+          <span class="field__label">自动作答使用精确匹配</span>
+          <span class="field__help">仅在题干、题型及完整选项一致时复用答案；题干发生变化时重新求解，避免“正确 / 不正确”等相似题误答。</span>
         </div>
 
         <label class="switch">

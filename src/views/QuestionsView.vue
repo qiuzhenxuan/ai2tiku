@@ -199,7 +199,7 @@ useLiveRefresh(load);
       </template>
     </div>
 
-    <AppModal v-if="modal" title="题目" wide @close="modal = false">
+    <AppModal :open="modal" title="题目" wide @close="modal = false">
       <div class="stack">
         <div class="field">
           <label class="field__label" for="q-type">题型</label>

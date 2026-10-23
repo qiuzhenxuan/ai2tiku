@@ -425,6 +425,15 @@ a {
   color: var(--accent);
   box-shadow: var(--shadow-sm);
 }
+.rail__item.is-active:is(:hover, :focus-visible) {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+}
+.rail__item.is-active:active {
+  background: var(--surface-active);
+  border-color: var(--text-muted);
+}
+.rail__item .rail__glyph { transition: scale 120ms var(--ease); }
 
 /* 动效只作用于导航图标，移开/失焦后沿原路复位。 */
 .rail__item svg > * {
@@ -451,13 +460,15 @@ a {
 .rail__item--dashboard:is(:hover, :focus-visible) svg > :nth-child(3) { transform: translate(1px, 1px); }
 .rail__item--dashboard:is(:hover, :focus-visible) svg > :nth-child(4) { transform: translate(-1px, 1px); }
 .rail__item--plug:is(:hover, :focus-visible) svg > :nth-child(3) { transform: translateY(-2px); }
-.rail__item--plug:is(:hover, :focus-visible) svg > :nth-child(4) { transform: scaleY(1.2); transform-origin: bottom; }
+.rail__item--plug svg > :nth-child(4), .rail__item--database svg > :nth-child(2) { transform-origin: center bottom; }
+.rail__item--plug:is(:hover, :focus-visible) svg > :nth-child(4) { transform: scaleY(1.2); }
 .rail__item--sparkles:is(:hover, :focus-visible) svg > :nth-child(1) { transform: scale(1.12) rotate(12deg); }
 .rail__item--sparkles:is(:hover, :focus-visible) svg > :nth-child(2) { transform: scale(1.2) rotate(-15deg); transition-delay: 90ms; }
 .rail__item--database:is(:hover, :focus-visible) svg > :nth-child(1) { transform: translateY(-2px); }
-.rail__item--database:is(:hover, :focus-visible) svg > :nth-child(2) { transform: scaleY(1.05); transform-origin: bottom; }
+.rail__item--database:is(:hover, :focus-visible) svg > :nth-child(2) { transform: scaleY(1.05); }
 .rail__item--database:is(:hover, :focus-visible) svg > :nth-child(3) { transform: translateY(-1px); }
-.rail__item--list:is(:hover, :focus-visible) svg > path { transform: translateX(1.5px) scaleX(1.05); transform-origin: left; }
+.rail__item--list svg > path { transform-origin: left center; }
+.rail__item--list:is(:hover, :focus-visible) svg > path { transform: translateX(1.5px) scaleX(1.05); }
 .rail__item--chart svg > rect { transform-origin: center bottom; }
 .rail__item--chart:is(:hover, :focus-visible) svg > :nth-child(2) { transform: scaleY(1.25); }
 .rail__item--chart:is(:hover, :focus-visible) svg > :nth-child(3) { transform: scaleY(1.15); }
@@ -1062,7 +1073,12 @@ button:not(:disabled), a[href], summary { cursor: pointer; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0s !important; }
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0s !important;
+    transition-delay: 0s !important;
+    animation: none !important;
+  }
 }
 
 .segmented__btn.is-active {
@@ -1304,7 +1320,6 @@ button:not(:disabled), a[href], summary { cursor: pointer; }
   place-items: center;
   z-index: 60;
   padding: 24px;
-  animation: fade 160ms var(--ease);
 }
 
 @keyframes fade {
@@ -1326,7 +1341,6 @@ button:not(:disabled), a[href], summary { cursor: pointer; }
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
   box-shadow: var(--shadow-lg);
-  animation: pop 200ms var(--ease);
 }
 
 @keyframes pop {
@@ -1376,7 +1390,7 @@ button:not(:disabled), a[href], summary { cursor: pointer; }
 .cell-link:hover { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
 .record-error { display: block; color: var(--danger); font-size: 11px; margin-top: 4px; }
 .modal-mask--drawer { display: flex; align-items: stretch; justify-content: flex-end; padding: 12px; }
-.modal.modal--drawer { width: min(600px, calc(100vw - 24px)); max-width: 600px; height: calc(100dvh - 24px); max-height: calc(100dvh - 24px); animation: drawer-in 220ms var(--ease); }
+.modal.modal--drawer { width: min(600px, calc(100vw - 24px)); max-width: 600px; height: calc(100dvh - 24px); max-height: calc(100dvh - 24px); }
 .modal--drawer .modal__body { flex: 1; }
 .detail-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-bottom: 20px; }
 .detail-section + .detail-section { margin-top: 24px; }
@@ -1398,8 +1412,16 @@ button:not(:disabled), a[href], summary { cursor: pointer; }
 .diagnostic-item .badge { justify-content: center; }
 .diagnostic-item strong { font-size: 12px; }
 .diagnostic-item p { color: var(--text-muted); font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
-@keyframes drawer-in { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
-@media (prefers-reduced-motion: reduce) { .modal.modal--drawer { animation: none; } }
+.dialog-enter-active { transition: opacity 220ms var(--ease); }
+.dialog-leave-active { transition: opacity 160ms ease-out; pointer-events: none; }
+.dialog-enter-active .modal { transition: transform 220ms var(--ease); }
+.dialog-leave-active .modal { transition: transform 160ms ease-out; }
+.dialog-enter-from, .dialog-leave-to { opacity: 0; }
+.dialog-enter-from .modal, .dialog-leave-to .modal { transform: translateY(8px) scale(.985); }
+.dialog-enter-from .modal--drawer, .dialog-leave-to .modal--drawer { transform: translateX(20px); }
+@media (prefers-reduced-motion: reduce) {
+  .dialog-enter-from .modal, .dialog-leave-to .modal { transform: none; }
+}
 
 .toast-host {
   position: fixed;

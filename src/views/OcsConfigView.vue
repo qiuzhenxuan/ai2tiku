@@ -157,7 +157,7 @@ async function openPermissions() {
         </div>
         <div class="row">
           <button class="btn btn--primary" type="button" :disabled="testing" @click="runTest">
-            <AppIcon name="play" :size="14" :class="{ spin: testing }" />
+            <AppIcon :name="testing ? 'refresh' : 'play'" :size="14" :class="{ spin: testing }" />
             {{ testing ? "搜索中…" : "开始测试" }}
           </button>
           <span class="faint small">未命中时会消耗 AI Token，可在「设置」里关闭 AI 兜底。</span>
@@ -235,7 +235,12 @@ async function openPermissions() {
   display: flex;
   flex-direction: column;
   gap: 9px;
-  animation: rise 220ms var(--ease);
+  animation: result-rise 220ms var(--ease);
+}
+
+@keyframes result-rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
 }
 
 .result--ok {

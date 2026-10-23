@@ -37,13 +37,24 @@ const navItems = routes.map((r) => ({
 const version = __APP_VERSION__;
 const hovered = ref("");
 const focused = ref("");
+const inputMode = ref<'pointer' | 'keyboard'>('pointer');
 const dismissed = ref(false);
-const isOpen = (name: string) => !dismissed.value && (hovered.value || focused.value) === name;
+const isOpen = (name: string) => !dismissed.value && (inputMode.value === 'keyboard' ? focused.value : hovered.value) === name;
 
 function enter(name: string, keyboard = false) {
+  inputMode.value = keyboard ? 'keyboard' : 'pointer';
   if (keyboard) focused.value = name;
   else hovered.value = name;
   dismissed.value = false;
+}
+
+function focusItem(event: FocusEvent, name: string) {
+  focused.value = name;
+  if ((event.currentTarget as HTMLElement).matches(':focus-visible')) enter(name, true);
+}
+
+function pointerMove(name: string) {
+  if (inputMode.value === 'keyboard') enter(name);
 }
 
 function moveFocus(event: KeyboardEvent) {
@@ -53,6 +64,7 @@ function moveFocus(event: KeyboardEvent) {
   const links = Array.from(nav.querySelectorAll<HTMLAnchorElement>(".rail__item"));
   const index = links.indexOf(document.activeElement as HTMLAnchorElement);
   if (index < 0) return;
+  inputMode.value = 'keyboard';
   event.preventDefault();
   const next = event.key === "Home" ? 0 : event.key === "End" ? links.length - 1
     : (index + (event.key === "ArrowDown" ? 1 : -1) + links.length) % links.length;
@@ -90,6 +102,7 @@ function moveFocus(event: KeyboardEvent) {
           class="rail__wrap"
           :class="{ 'is-open': isOpen(item.name) }"
           @mouseenter="enter(item.name)"
+          @mousemove="pointerMove(item.name)"
           @mouseleave="hovered = ''"
         >
           <a
@@ -99,9 +112,9 @@ function moveFocus(event: KeyboardEvent) {
             :aria-label="item.title"
             :aria-current="isExactActive ? 'page' : undefined"
             :aria-describedby="isOpen(item.name) ? `nav-tip-${item.name}` : undefined"
-            @focus="enter(item.name, true)"
+            @focus="focusItem($event, item.name)"
             @blur="focused = ''"
-            @click="navigate"
+            @click="dismissed = true; navigate($event)"
           >
             <span class="rail__glyph" aria-hidden="true">
               <RocketMark v-if="item.name === 'deploy'" />

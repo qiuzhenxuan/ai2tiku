@@ -6,7 +6,7 @@ defineProps<{ question?: Question | null; record?: SearchRecord | null }>();
 defineEmits<{ close: [] }>();
 </script>
 <template>
-  <AppModal v-if="question || record" :title="record ? '答题详情' : '题目详情'" drawer @close="$emit('close')">
+  <AppModal :open="!!(question || record)" :title="record ? '答题详情' : '题目详情'" drawer @close="$emit('close')">
     <div class="detail-meta">
       <span class="badge badge--off">{{ typeLabel((question || record)?.qtype || 'unknown') }}</span>
       <span class="badge" :class="record?.status === 'failure' ? 'badge--warn' : 'badge--ok'">{{ record ? record.status === 'failure' ? '失败' : '成功' : sourceLabel(question?.source || '') }}</span>

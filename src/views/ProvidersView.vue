@@ -270,10 +270,10 @@ onMounted(async () => {
                     <AppIcon name="bolt" :size="13" />
                     测试
                   </button>
-                  <button class="btn btn--ghost btn--sm" type="button" @click="openProvider(p)">
+                  <button class="btn btn--ghost btn--sm btn--icon" type="button" :aria-label="`编辑供应商：${p.name}`" title="编辑供应商" @click="openProvider(p)">
                     <AppIcon name="edit" :size="13" />
                   </button>
-                  <button class="btn btn--ghost btn--sm" type="button" @click="removeProvider(p)">
+                  <button class="btn btn--ghost btn--sm btn--icon" type="button" :aria-label="`删除供应商：${p.name}`" title="删除供应商" @click="removeProvider(p)">
                     <AppIcon name="trash" :size="13" />
                   </button>
                 </div>
@@ -341,10 +341,10 @@ onMounted(async () => {
                   >
                     设为默认
                   </button>
-                  <button class="btn btn--ghost btn--sm" type="button" @click="openModel(m)">
+                  <button class="btn btn--ghost btn--sm btn--icon" type="button" :aria-label="`编辑模型：${m.displayName || m.model}`" title="编辑模型" @click="openModel(m)">
                     <AppIcon name="edit" :size="13" />
                   </button>
-                  <button class="btn btn--ghost btn--sm" type="button" @click="removeModel(m)">
+                  <button class="btn btn--ghost btn--sm btn--icon" type="button" :aria-label="`删除模型：${m.displayName || m.model}`" title="删除模型" @click="removeModel(m)">
                     <AppIcon name="trash" :size="13" />
                   </button>
                 </div>
@@ -355,7 +355,7 @@ onMounted(async () => {
       </div>
     </div>
 
-    <AppModal v-if="providerModal" title="AI 供应商" @close="providerModal = false">
+    <AppModal :open="providerModal" title="AI 供应商" @close="providerModal = false">
       <div class="stack">
         <div class="field">
           <label class="field__label" for="p-preset">预置供应商</label>
@@ -411,7 +411,7 @@ onMounted(async () => {
       </template>
     </AppModal>
 
-    <AppModal v-if="modelModal" title="模型" @close="modelModal = false">
+    <AppModal :open="modelModal" title="模型" @close="modelModal = false">
       <div class="stack">
         <div class="field">
           <label class="field__label" for="m-provider">所属供应商</label>

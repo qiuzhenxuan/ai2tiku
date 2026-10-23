@@ -50,8 +50,8 @@ async function apply() {
     <div class="row"><button class="btn" type="button" :disabled="busy" @click="exportFile">备份 / 导出</button><button class="btn" type="button" :disabled="busy" @click="pick">导入 / 恢复</button></div>
     <p v-if="backupPath" class="transfer-backup small">恢复前的自动备份：<span class="mono">{{ backupPath }}</span></p>
   </div>
-  <AppModal v-if="opened && preview" title="导入预览" wide @close="!busy && (opened = false)">
-    <div class="stack">
+  <AppModal :open="opened && !!preview" title="导入预览" wide @close="!busy && (opened = false)">
+    <div v-if="preview" class="stack">
       <p class="detail-text"><strong>{{ filename }}</strong><br><span class="faint small">文件 {{ preview.total }} 条 · 可恢复 {{ preview.valid }} 道 · 文件内重复 {{ preview.fileDuplicates }} 条</span></p>
       <p v-if="preview.fileConflicts" class="callout callout--warn">备份中有 {{ preview.fileConflicts }} 条同题冲突。整库恢复会保留备份中的原始数据；合并时同题仅保留第一条，请先核对答案。</p>
       <div class="import-counts"><div><strong>{{ preview.newCount }}</strong><span>新题目</span></div><div><strong>{{ preview.duplicates }}</strong><span>已有重复题</span></div><div><strong>{{ preview.conflicts }}</strong><span>与现有答案冲突</span></div><div><strong>{{ preview.invalid }}</strong><span>无效条目</span></div></div>
@@ -60,6 +60,6 @@ async function apply() {
       <label class="import-mode"><input v-model="mode" type="radio" value="replace" :disabled="busy"><span><strong>恢复整个题库</strong><small>使用此文件替换全部题目；执行前自动保存当前题库备份。</small></span></label>
       <p class="field__help">支持本软件的版本化 JSON 备份，以及含 title、options、qtype、answer 的题目数组。恢复仅作用于题库。</p>
     </div>
-    <template #foot><button class="btn" type="button" :disabled="busy" @click="refreshPreview">重新预览</button><button class="btn" type="button" :disabled="busy" @click="opened = false">取消</button><button class="btn btn--primary" type="button" :disabled="busy || preview.invalid > 0 || (mode === 'replace' && preview.valid === 0)" @click="apply">{{ busy ? '处理中…' : mode === 'replace' ? '恢复题库' : '导入新题' }}</button></template>
+    <template #foot><button class="btn" type="button" :disabled="busy" @click="refreshPreview">重新预览</button><button class="btn" type="button" :disabled="busy" @click="opened = false">取消</button><button class="btn btn--primary" type="button" :disabled="busy || !preview || preview.invalid > 0 || (mode === 'replace' && preview.valid === 0)" @click="apply">{{ busy ? '处理中…' : mode === 'replace' ? '恢复题库' : '导入新题' }}</button></template>
   </AppModal>
 </template>

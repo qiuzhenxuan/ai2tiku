@@ -69,10 +69,10 @@ function moveFocus(event: KeyboardEvent) {
     <button class="rail__toggle" type="button" :aria-expanded="expanded" aria-controls="sidebar-navigation"
       :aria-label="expanded ? '收起菜单' : '展开菜单'" :title="expanded ? '收起菜单' : '展开菜单'" @click="toggle">
       <span class="rail__glyph">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+        <svg class="rail__toggle-symbol" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
           <rect x="3" y="4" width="18" height="16" rx="2" />
-          <path d="M9 4v16" />
-          <path :d="expanded ? 'm16 9-3 3 3 3' : 'm13 9 3 3-3 3'" />
+          <path class="rail__toggle-divider" d="M9 4v16" />
+          <path class="rail__toggle-arrow" :d="expanded ? 'm16 9-3 3 3 3' : 'm13 9 3 3-3 3'" />
         </svg>
       </span>
       <span class="rail__label" :aria-hidden="!expanded">收起菜单</span>

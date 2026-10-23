@@ -363,6 +363,18 @@ a {
   transition: background var(--speed) var(--ease), color var(--speed) var(--ease), border-color var(--speed) var(--ease);
 }
 .rail__toggle .rail__glyph { margin-left: -1px; }
+.rail__toggle { --toggle-direction: 1; }
+.rail__toggle[aria-expanded="true"] { --toggle-direction: -1; }
+.rail__toggle-arrow, .rail__toggle-divider {
+  transform: translateX(0);
+  transition: transform 300ms cubic-bezier(.22, .61, .36, 1);
+}
+.rail__toggle:is(:hover, :focus-visible) .rail__toggle-arrow {
+  transform: translateX(calc(var(--toggle-direction) * 3px));
+}
+.rail__toggle:is(:hover, :focus-visible) .rail__toggle-divider {
+  transform: translateX(calc(var(--toggle-direction) * 1px));
+}
 .rail__toggle:is(:hover, :focus-visible) { background: var(--surface-hover); border-color: var(--border-strong); color: var(--text); }
 .rail__toggle:active { background: var(--surface-active); }
 
@@ -489,6 +501,7 @@ a {
 @media (prefers-reduced-motion: reduce) {
   .rail *, .rail *::before, .rail *::after { transition: none !important; animation: none !important; }
   .rail__item svg, .rail__item svg > *, .rail__glyph, .rocket-mark, .rail__flyout-inner { transform: none !important; scale: none !important; }
+  .rail__toggle-symbol > * { transform: none !important; }
 }
 
 .rail__flyout-title {

@@ -60,6 +60,23 @@ async function main() {
     assert.deepEqual(await origins(), before);
     assert.equal(await page.locator('.rail--expanded').count(), 0);
 
+    const toggle = page.locator('.rail__toggle');
+    const arrowShift = () => page.locator('.rail__toggle-arrow').evaluate(el => new DOMMatrixReadOnly(getComputedStyle(el).transform).e);
+    const toggleBounds = await toggle.boundingBox();
+    // End the preceding keyboard interaction before testing pointer-only exit.
+    await page.locator('.topbar__title').click();
+    await toggle.hover(); await page.waitForTimeout(340);
+    assert.ok(await arrowShift() > 2.9, 'Collapsed toggle must guide toward opening');
+    assert.deepEqual(await toggle.boundingBox(), toggleBounds, 'Hover must not resize the toggle');
+    await toggle.click(); await page.waitForTimeout(340);
+    assert.ok(await arrowShift() < -2.9, 'Expanded toggle must guide toward closing');
+    await page.locator('.topbar__title').hover(); await page.waitForTimeout(340);
+    assert.ok(Math.abs(await arrowShift()) < .1, JSON.stringify(await toggle.evaluate(el => ({ message: 'Pointer exit must restore the toggle', hover: el.matches(':hover'), focus: el.matches(':focus-visible'), arrow: getComputedStyle(el.querySelector('.rail__toggle-arrow')).transform }))));
+    await page.keyboard.press('Tab'); await page.keyboard.press('Shift+Tab');
+    assert.equal(await toggle.evaluate(el => el.matches(':focus-visible')), true);
+    await page.waitForTimeout(340); assert.ok(await arrowShift() < -2.9, 'Keyboard focus must show the closing cue');
+    await toggle.click(); await page.waitForTimeout(340);
+
     const sidebarMotion = [];
     for (const reverse of [false, false, true]) {
       const timeline = await page.evaluate(reverse => new Promise(resolve => {
@@ -160,8 +177,10 @@ async function main() {
     assert.equal(await page.locator('.rocket-mark__exhaust').evaluate(el => getComputedStyle(el).display), 'none');
     assert.equal(await page.locator('.rocket-mark').evaluate(el => getComputedStyle(el).transform), 'none');
     assert.equal(await page.locator('.app-shell').evaluate(el => getComputedStyle(el).transitionDuration), '0s');
+    await toggle.hover();
+    assert.ok(Math.abs(await arrowShift()) < .1, 'Reduced motion must keep the toggle icon still');
     assert.deepEqual(errors, []);
-    const result = { passed: true, screenshots: 65, pages: 8, themes: 2, sidebarStates: 2, sidebarMotion, sizes: [1160, 900], contextMenuPrevented: true, editingShortcuts: true, controlsHeight: 34, particleCount: 72, reducedMotion: true, cadence, errors, scope: 'Production WebView frontend in Edge; isolated mocked IPC; no paid model calls', measurements };
+    const result = { passed: true, screenshots: 65, pages: 8, themes: 2, sidebarStates: 2, sidebarMotion, toggleDirectionCues: true, toggleFocusAndReset: true, sizes: [1160, 900], contextMenuPrevented: true, editingShortcuts: true, controlsHeight: 34, particleCount: 72, reducedMotion: true, cadence, errors, scope: 'Production WebView frontend in Edge; isolated mocked IPC; no paid model calls', measurements };
     await fs.writeFile(path.join(output, 'result.json'), JSON.stringify(result, null, 2));
     console.log(JSON.stringify({ ...result, measurements: undefined }));
   } finally { if (browser) await browser.close(); server.kill(); }

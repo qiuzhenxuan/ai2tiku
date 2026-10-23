@@ -12,6 +12,10 @@ dist
 dist-ssr
 test-results/
 *.local
+.env
+.env.*
+!.env.example
+deploy/secrets/
 
 # Editor directories and files
 .vscode/*

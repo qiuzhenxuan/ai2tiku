@@ -191,10 +191,16 @@ pub(crate) fn answer_for_options(
 }
 
 pub fn now() -> String {
+    #[cfg(feature = "hosted")]
+    return chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    #[cfg(not(feature = "hosted"))]
     chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string()
 }
 
 fn today() -> String {
+    #[cfg(feature = "hosted")]
+    return chrono::Utc::now().format("%Y-%m-%d").to_string();
+    #[cfg(not(feature = "hosted"))]
     chrono::Local::now().format("%Y-%m-%d").to_string()
 }
 

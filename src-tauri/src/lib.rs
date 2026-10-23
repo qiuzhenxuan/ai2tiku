@@ -1,5 +1,5 @@
 mod ai;
-#[cfg(not(any(feature = "native", feature = "webview")))]
+#[cfg(not(any(feature = "native", feature = "webview", feature = "hosted")))]
 compile_error!("请启用 webview 或 native 功能，默认使用 WebView 界面");
 #[cfg(all(
     feature = "webview",
@@ -13,6 +13,8 @@ mod browser;
 mod commands;
 mod db;
 mod diagnostics;
+#[cfg(feature = "hosted")]
+pub mod hosted;
 mod models;
 #[cfg(feature = "native")]
 mod native;

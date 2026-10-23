@@ -1,0 +1,44 @@
+name: ai2tiku-hosted
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    restart: unless-stopped
+    environment:
+      PUBLIC_URL: ${PUBLIC_URL:?Set PUBLIC_URL in deploy/.env}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?Set ADMIN_EMAIL in deploy/.env}
+      MASTER_KEY_FILE: /run/secrets/master_key
+      ADMIN_PASSWORD_FILE: /run/secrets/admin_password
+      DATA_DIR: /data
+      HOSTED_BIND: 0.0.0.0:8080
+      REGISTRATION_OPEN: ${REGISTRATION_OPEN:-false}
+      ALLOWED_PROVIDER_URLS: ${ALLOWED_PROVIDER_URLS:-}
+    secrets:
+      - master_key
+      - admin_password
+    volumes:
+      - app_data:/data
+    expose:
+      - "8080"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.web
+    restart: unless-stopped
+    ports:
+      - "${LISTEN_ADDRESS:-127.0.0.1}:${HTTP_PORT:-8080}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+secrets:
+  master_key:
+    file: ./secrets/master_key
+  admin_password:
+    file: ./secrets/admin_password
+volumes:
+  app_data:

@@ -4,6 +4,7 @@ version = "0.2.5"
 description = "AI 驱动的 OCS 题库服务：把大模型接入 OCS 网课助手"
 authors = ["ai2tiku"]
 edition = "2021"
+default-run = "ai2tiku"
 
 [lib]
 # The `_lib` suffix is necessary to avoid a name conflict with the bin target on Windows.
@@ -15,6 +16,12 @@ default = ["webview"]
 native = ["dep:eframe", "dep:image", "dep:dirs", "dep:arboard"]
 webview = ["dep:tauri", "dep:tauri-plugin-opener", "dep:tauri-plugin-clipboard-manager", "dep:tauri-plugin-dialog", "dep:tauri-build"]
 custom-protocol = ["tauri?/custom-protocol"]
+hosted = ["dep:aes-gcm", "dep:argon2", "dep:base64", "dep:rand", "dep:sha2", "dep:tower"]
+
+[[bin]]
+name = "ai2tiku-server"
+path = "src/bin/ai2tiku-server.rs"
+required-features = ["hosted"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [], optional = true }
@@ -37,6 +44,12 @@ tower-http = { version = "0.6", features = ["cors"] }
 reqwest = { version = "0.12", features = ["json"] }
 rusqlite = { version = "0.32", features = ["bundled"] }
 chrono = "0.4"
+aes-gcm = { version = "0.10", optional = true }
+argon2 = { version = "0.5", optional = true }
+base64 = { version = "0.22", optional = true }
+rand = { version = "0.8", optional = true }
+sha2 = { version = "0.10", optional = true }
+tower = { version = "0.5", features = ["util"], optional = true }
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
 [profile.release]

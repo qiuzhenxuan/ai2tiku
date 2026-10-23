@@ -1,0 +1,21 @@
+{
+  "passed": true,
+  "realBackend": true,
+  "csrf": true,
+  "tenantIsolation": true,
+  "roleChecks": true,
+  "oneTimeToken": true,
+  "encryptedModelKey": true,
+  "quotaEnforced": true,
+  "adminRevoke": true,
+  "disabledSessions": true,
+  "githubLinks": true,
+  "responsiveWidths": [
+    1280,
+    900,
+    390
+  ],
+  "screenshots": 0,
+  "modelCalls": 0,
+  "errors": []
+}

@@ -1,0 +1,15 @@
+.git
+**/node_modules
+**/target
+**/dist
+**/.env
+**/.env.*
+**/*.local
+deploy/secrets
+test-results
+presentations
+offline-registration
+*.docx
+*.pptx
+*.pdf
+Xuzhou_Confucius_Temple_Research*

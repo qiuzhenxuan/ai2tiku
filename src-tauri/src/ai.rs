@@ -255,6 +255,21 @@ async fn complete(
         .map_err(|e| format!("请求 AI 失败：{}", describe(&e)))?;
 
     let status = resp.status();
+    // Hosted traffic has an explicit upstream memory budget. A malformed approved
+    // provider must not allocate an unbounded response for every concurrent user.
+    #[cfg(feature = "hosted")]
+    let text = {
+        let mut resp = resp;
+        let mut bytes = Vec::new();
+        while let Some(chunk) = resp.chunk().await.map_err(|_| "读取 AI 响应失败")? {
+            if bytes.len() + chunk.len() > 2 * 1024 * 1024 {
+                return Err("AI 响应超过 2 MiB 限制".into());
+            }
+            bytes.extend_from_slice(&chunk);
+        }
+        String::from_utf8(bytes).map_err(|_| "AI 响应编码无效")?
+    };
+    #[cfg(not(feature = "hosted"))]
     let text = resp
         .text()
         .await

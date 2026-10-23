@@ -31,3 +31,38 @@ jobs:
         run: cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
       - name: Rust 业务测试
         run: cargo test --manifest-path src-tauri/Cargo.toml --locked --lib
+  hosted:
+    name: Linux 网页端与 Docker
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: 网页端类型检查与构建
+        run: |
+          npm ci --prefix web
+          npm --prefix web run build
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          key: hosted-linux
+      - name: 多用户服务测试
+        run: cargo test --manifest-path src-tauri/Cargo.toml --no-default-features --features hosted --locked --lib
+      - name: Docker 镜像构建
+        run: |
+          node scripts/init-hosted.cjs
+          docker compose --env-file deploy/.env -f deploy/compose.yaml build
+      - name: 容器启动与入口检查
+        run: |
+          docker compose --env-file deploy/.env -f deploy/compose.yaml up -d --wait --wait-timeout 90
+          curl --fail --silent http://127.0.0.1:8080/healthz
+          curl --fail --silent http://127.0.0.1:8080/api/console/bootstrap > /dev/null
+          docker compose --env-file deploy/.env -f deploy/compose.yaml exec -T web nginx -t
+      - name: 清理测试容器
+        if: always()
+        run: docker compose --env-file deploy/.env -f deploy/compose.yaml down -v

@@ -6,7 +6,9 @@ const { spawn } = require('node:child_process');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const assert = require('node:assert/strict');
+const { screenshotArtifacts } = require('./screenshot-artifacts.cjs');
 const output = path.resolve(process.argv[2] || 'test-results/data-features');
+const artifacts = screenshotArtifacts(output);
 
 async function featureFixtures() {
   const original = window.__TAURI_INTERNALS__.invoke;
@@ -83,7 +85,7 @@ async function featureFixtures() {
       await page.evaluate(theme => document.documentElement.setAttribute('data-theme', theme), theme);
       await page.waitForTimeout(220);
       assert.equal(await drawer.evaluate(el => el.scrollWidth <= el.clientWidth + 1 && el.getBoundingClientRect().right <= innerWidth), true);
-      await page.screenshot({ path: path.join(output, `record-drawer-${theme}-${width}.png`) }); screenshots++;
+      await artifacts.capture(page, `record-drawer-${theme}-${width}.png`); screenshots++;
     }
     await page.keyboard.press('Escape'); await drawer.waitFor({ state: 'detached' });
     assert.equal(await detailButton.evaluate(el => document.activeElement === el), true); assert.equal(await page.locator('#app').evaluate(el => el.inert), false);
@@ -105,14 +107,14 @@ async function featureFixtures() {
     await preview.getByRole('button', { name: '恢复题库', exact: true }).click();
     const restore = page.getByRole('dialog', { name: '恢复并替换整个题库？' }); await restore.waitFor();
     await page.waitForTimeout(250);
-    await page.screenshot({ path: path.join(output, 'restore-confirm.png') }); screenshots++;
+    await artifacts.capture(page, 'restore-confirm.png'); screenshots++;
     await restore.getByRole('button', { name: '备份并恢复', exact: true }).click(); await preview.waitFor({ state: 'detached' });
     assert.equal(await calls('apply_question_import'), 1); await page.getByText('恢复前的自动备份：', { exact: false }).waitFor();
     // Invalid content blocks writes in the UI, in addition to backend checks.
     await page.evaluate(() => { window.testPreview = { ...window.testPreview, invalid: 1, errors: ['第 1 条：答案超出范围'] }; });
     await page.getByRole('button', { name: '导入 / 恢复' }).click(); await preview.waitFor();
     assert.equal(await preview.getByRole('button', { name: '导入新题' }).isDisabled(), true);
-    await page.screenshot({ path: path.join(output, 'invalid-import.png') }); screenshots++;
+    await artifacts.capture(page, 'invalid-import.png'); screenshots++;
     await page.keyboard.press('Escape');
 
     await page.goto(base + 'settings?diagnose=1'); await page.locator('.diagnostic-item').first().waitFor();
@@ -123,7 +125,7 @@ async function featureFixtures() {
     await page.getByText('调用正常，本次 5 Token', { exact: true }).waitFor();
     for (const width of [1160, 900]) for (const theme of ['light', 'dark']) {
       await page.setViewportSize({ width, height: width === 900 ? 600 : 760 }); await page.evaluate(theme => document.documentElement.setAttribute('data-theme', theme), theme);
-      await page.screenshot({ path: path.join(output, `diagnostics-${theme}-${width}.png`) }); screenshots++;
+      await artifacts.capture(page, `diagnostics-${theme}-${width}.png`); screenshots++;
       assert.equal(await page.locator('.content').evaluate(el => el.scrollWidth <= el.clientWidth), true);
     }
     await page.goto(base + 'records?initial-failure=1');
@@ -135,5 +137,5 @@ async function featureFixtures() {
     assert.deepEqual(errors, []);
     const result = { passed: true, screenshots, liveRevisionRefresh: true, unchangedRevisionNoReload: true, hiddenPollingSuspended: true, failedRefreshRetried: true, longQuestionAndOptions: true, failureDetails: true, drawerFocusTrapAndRestore: true, inAppConfirmation: true, safeCancel: true, exportAndImportPreview: true, restoreConfirmationAndBackupPath: true, invalidImportBlocked: true, localDiagnosisNoModelCalls: true, paidDiagnosisExplicitConfirmation: true, errors, scope: 'Production Vue UI in Edge, isolated IPC fixtures; no paid model calls' };
     await fs.writeFile(path.join(output, 'features-result.json'), JSON.stringify(result, null, 2)); console.log(JSON.stringify(result));
-  } finally { if (browser) await browser.close(); server.kill(); }
+  } finally { try { if (browser) await browser.close(); } finally { server.kill(); await artifacts.cleanup(); } }
 })().catch(error => { console.error(error); process.exitCode = 1; });

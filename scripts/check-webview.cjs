@@ -5,7 +5,9 @@ const { spawn } = require('node:child_process');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const assert = require('node:assert/strict');
+const { screenshotArtifacts } = require('./screenshot-artifacts.cjs');
 const output = path.resolve(process.argv[2] || 'test-results/webview');
+const artifacts = screenshotArtifacts(output);
 
 async function fixtures() {
   window.testPrefs = {};
@@ -129,7 +131,7 @@ async function main() {
         assert.equal(dimensions.navInside, true, 'all eight navigation items must be reachable');
         for (const control of dimensions.controls) assert.equal(control.height, 34, JSON.stringify({ route, ...control }));
         const name = `${route || 'dashboard'}-${theme}-${expanded ? 'expanded' : 'collapsed'}-${size.width}`;
-        await page.screenshot({ path: path.join(output, name + '.png') });
+        await artifacts.capture(page, name + '.png');
         measurements.push({ name, ...dimensions });
       }
     }
@@ -173,7 +175,7 @@ async function main() {
     const intervals = frames.slice(1).map((time, i) => time - frames[i]).sort((a, b) => a - b);
     const cadence = { frames: frames.length, medianMs: intervals[Math.floor(intervals.length / 2)], p95Ms: intervals[Math.floor(intervals.length * .95)] };
     assert.ok(cadence.medianMs < 25 && cadence.p95Ms < 50, JSON.stringify(cadence));
-    await page.screenshot({ path: path.join(output, 'rocket-hover.png') });
+    await artifacts.capture(page, 'rocket-hover.png');
     await page.mouse.move(700, 100); await page.locator('.topbar__title').click(); await page.waitForTimeout(1500);
     assert.equal(await page.locator('.rocket-mark__exhaust').evaluate(el => getComputedStyle(el).opacity), '0');
     assert.equal(await page.locator('.rocket-mark__exhaust i').first().evaluate(el => getComputedStyle(el).animationPlayState), 'paused');
@@ -187,7 +189,7 @@ async function main() {
     const result = { passed: true, screenshots: 65, pages: 8, themes: 2, sidebarStates: 2, sidebarMotion, toggleDirectionCues: true, toggleFocusAndReset: true, sizes: [1160, 900], contextMenuPrevented: true, editingShortcuts: true, controlsHeight: 34, particleCount: 72, reducedMotion: true, cadence, errors, scope: 'Production WebView frontend in Edge; isolated mocked IPC; no paid model calls', measurements };
     await fs.writeFile(path.join(output, 'result.json'), JSON.stringify(result, null, 2));
     console.log(JSON.stringify({ ...result, measurements: undefined }));
-  } finally { if (browser) await browser.close(); server.kill(); }
+  } finally { try { if (browser) await browser.close(); } finally { server.kill(); await artifacts.cleanup(); } }
 }
 if (require.main === module) main().catch(error => { console.error(error); process.exitCode = 1; });
 module.exports = { fixtures };

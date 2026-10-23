@@ -4,9 +4,11 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
+const { screenshotArtifacts } = require('./screenshot-artifacts.cjs');
 
 (async () => {
   const output = path.resolve(process.argv[3] || 'test-results/desktop-webview');
+  const artifacts = screenshotArtifacts(output);
   await fs.mkdir(output, { recursive: true });
   const browser = await chromium.connectOverCDP(process.argv[2] || 'http://127.0.0.1:9227');
   try {
@@ -31,7 +33,7 @@ const path = require('node:path');
     assert.ok(await arrowShift() < -2.9, 'Expanded desktop toggle must guide toward closing');
     await page.locator('.topbar__title').hover(); await page.waitForTimeout(340);
     assert.ok(Math.abs(await arrowShift()) < .1, 'Desktop toggle must reset on pointer exit');
-    await page.screenshot({ path: path.join(output, 'desktop-expanded.png') });
+    await artifacts.capture(page, 'desktop-expanded.png');
     await page.getByRole('button', { name: '收起菜单', exact: true }).click();
     await page.goto(root + '#/questions');
     await page.getByRole('button', { name: '新增题目', exact: false }).click();
@@ -48,7 +50,7 @@ const path = require('node:path');
     await page.waitForTimeout(1500);
     assert.equal(await page.locator('.rocket-mark__exhaust').evaluate(el => getComputedStyle(el).opacity), '1');
     assert.equal(await page.locator('.rocket-mark__exhaust i').count(), 72);
-    await page.screenshot({ path: path.join(output, 'desktop-rocket.png') });
+    await artifacts.capture(page, 'desktop-rocket.png');
     const samples = await page.evaluate(() => new Promise(resolve => {
       const frames = []; const start = performance.now();
       const tick = time => { frames.push(time); if (time - start < 2000) requestAnimationFrame(tick); else resolve(frames); };
@@ -59,5 +61,5 @@ const path = require('node:path');
     assert.ok(result.medianFrameMs < 25 && result.p95FrameMs < 50, JSON.stringify(result));
     await fs.writeFile(path.join(output, 'desktop-result.json'), JSON.stringify(result, null, 2));
     console.log(JSON.stringify(result));
-  } finally { await browser.close(); }
+  } finally { try { await browser.close(); } finally { await artifacts.cleanup(); } }
 })().catch(error => { console.error(error); process.exitCode = 1; });

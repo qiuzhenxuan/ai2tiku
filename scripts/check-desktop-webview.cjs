@@ -15,7 +15,13 @@ const path = require('node:path');
     const root = page.url().split('#')[0];
     await page.locator('.page').waitFor();
     await page.reload();
-    await page.getByRole('button', { name: '展开菜单', exact: true }).click();
+    const sidebarFrames = await page.evaluate(() => new Promise(resolve => {
+      const widths = []; const started = performance.now();
+      function tick(time) { widths.push(document.querySelector('.rail').getBoundingClientRect().width); if (time - started < 350) requestAnimationFrame(tick); else resolve(widths); }
+      requestAnimationFrame(tick); document.querySelector('.rail__toggle').click();
+    }));
+    assert.ok(sidebarFrames.filter(width => width > 73 && width < 199).length >= 5);
+    await page.waitForFunction(() => Math.abs(document.querySelector('.rail').getBoundingClientRect().width - 200) < .1);
     assert.equal(await page.locator('.rail').evaluate(el => el.getBoundingClientRect().width), 200);
     await page.screenshot({ path: path.join(output, 'desktop-expanded.png') });
     await page.getByRole('button', { name: '收起菜单', exact: true }).click();
@@ -41,7 +47,7 @@ const path = require('node:path');
       requestAnimationFrame(tick);
     }));
     const intervals = samples.slice(1).map((time, index) => time - samples[index]).sort((a, b) => a - b);
-    const result = { passed: true, actualTauriRelease: true, contextMenuPrevented: true, editingShortcuts: true, sidebarToggle: true, particles: 72, frameSamples: samples.length, medianFrameMs: intervals[Math.floor(intervals.length / 2)], p95FrameMs: intervals[Math.floor(intervals.length * .95)], scope: 'Actual Windows Tauri/WebView2 Release, isolated --data-dir, no paid calls and no test IPC mocks' };
+    const result = { passed: true, actualTauriRelease: true, contextMenuPrevented: true, editingShortcuts: true, sidebarToggle: true, sidebarAnimationIntermediateFrames: sidebarFrames.filter(width => width > 73 && width < 199).length, particles: 72, frameSamples: samples.length, medianFrameMs: intervals[Math.floor(intervals.length / 2)], p95FrameMs: intervals[Math.floor(intervals.length * .95)], scope: 'Actual Windows Tauri/WebView2 Release, isolated --data-dir, no paid calls and no test IPC mocks' };
     assert.ok(result.medianFrameMs < 25 && result.p95FrameMs < 50, JSON.stringify(result));
     await fs.writeFile(path.join(output, 'desktop-result.json'), JSON.stringify(result, null, 2));
     console.log(JSON.stringify(result));

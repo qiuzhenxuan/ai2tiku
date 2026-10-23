@@ -64,7 +64,7 @@ function moveFocus(event: KeyboardEvent) {
   <aside class="rail" :class="{ 'rail--expanded': expanded }" aria-label="应用菜单">
     <div class="rail__brand" title="ai2tiku · OCS 智能题库" aria-label="ai2tiku · 无限墨环">
       <span class="rail__brand-mark"><AppLogo /></span>
-      <span v-if="expanded" class="rail__brand-copy"><strong>ai2tiku</strong><small>AI 题库</small></span>
+      <span class="rail__brand-copy" :aria-hidden="!expanded"><strong>ai2tiku</strong><small>AI 题库</small></span>
     </div>
     <button class="rail__toggle" type="button" :aria-expanded="expanded" aria-controls="sidebar-navigation"
       :aria-label="expanded ? '收起菜单' : '展开菜单'" :title="expanded ? '收起菜单' : '展开菜单'" @click="toggle">
@@ -75,7 +75,7 @@ function moveFocus(event: KeyboardEvent) {
           <path :d="expanded ? 'm16 9-3 3 3 3' : 'm13 9 3 3-3 3'" />
         </svg>
       </span>
-      <span v-if="expanded" class="rail__label">收起菜单</span>
+      <span class="rail__label" :aria-hidden="!expanded">收起菜单</span>
     </button>
 
     <nav id="sidebar-navigation" class="rail__nav" aria-label="主导航" @keydown="moveFocus" @keydown.esc="dismissed = true">
@@ -107,7 +107,7 @@ function moveFocus(event: KeyboardEvent) {
               <RocketMark v-if="item.name === 'deploy'" />
               <AppIcon v-else :name="item.icon" :size="20" />
             </span>
-            <span v-if="expanded" class="rail__label">{{ item.title }}</span>
+            <span class="rail__label" :aria-hidden="!expanded">{{ item.title }}</span>
           </a>
 
           <div :id="`nav-tip-${item.name}`" class="rail__flyout" role="tooltip" :aria-hidden="!isOpen(item.name)">

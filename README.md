@@ -12,7 +12,7 @@ OCS 脚本通过标准的「题库配置」调用它。**先用本地题库匹�
 
 ## 更新记录
 
-2026-10-23（v0.2.2，WebView 主版本）：默认使用 Vue + Tauri 界面，关闭浏览器右键菜单，并将 0.2.1 的折叠侧栏、连续火箭尾焰和控件反馈同步到 WebView。菜单默认仅显示图标，点击顶部按钮展开；常规按钮和单行字段统一 34px 高度，支持键盘聚焦和减少动态效果。保留黑白水墨视觉、毛笔无限标志和已有业务修复，继续读取原数据库。
+2026-10-23（v0.2.3，WebView 主版本）：默认使用 Vue + Tauri 界面，关闭浏览器右键菜单，并将 0.2.1 的折叠侧栏、连续火箭尾焰和控件反馈同步到 WebView。菜单默认仅显示图标，点击顶部按钮平滑展开、收起，文字渐显且图标保持原位；常规按钮和单行字段统一 34px 高度，支持键盘聚焦和减少动态效果。保留黑白水墨视觉、毛笔无限标志和已有业务修复，继续读取原数据库。
 详细变化、升级说明与验证结果见 [更新日志](CHANGELOG.md)。
 
 ## 功能
@@ -45,7 +45,7 @@ WebView 主版本的黑白水墨主题（演示数据）：
 | --- | --- |
 | ![本地题库](docs/screenshots/questions.png) | ![夜间概览](docs/screenshots/dashboard-dark.png) |
 
-侧栏默认显示图标，点击顶部展开按钮可查看文字菜单：[展开效果](docs/screenshots/questions-expanded.png)。验证范围见 [WebView 验证记录](docs/webview-validation-0.2.2.md)。
+侧栏默认显示图标，点击顶部展开按钮可查看文字菜单：[展开效果](docs/screenshots/questions-expanded.png)。验证范围见 [WebView 验证记录](docs/webview-validation-0.2.3.md)。
 
 ## 技术栈
 
@@ -59,11 +59,11 @@ WebView 主版本的黑白水墨主题（演示数据）：
 
 ## 下载
 
-去 [v0.2.2 Release](https://github.com/qiuzhenxuan/ai2tiku/releases/tag/v0.2.2) 下载 Windows x64 主版本：
+去 [v0.2.3 Release](https://github.com/qiuzhenxuan/ai2tiku/releases/tag/v0.2.3) 下载 Windows x64 主版本：
 
 | 文件 | 界面与运行要求 |
 | --- | --- |
-| [ai2tiku-webview-windows-x64.exe](https://github.com/qiuzhenxuan/ai2tiku/releases/download/v0.2.2/ai2tiku-webview-windows-x64.exe) | Vue + Tauri 界面，包含本轮交互修复，需要 WebView2 Runtime |
+| [ai2tiku-webview-windows-x64.exe](https://github.com/qiuzhenxuan/ai2tiku/releases/download/v0.2.3/ai2tiku-webview-windows-x64.exe) | Vue + Tauri 界面，包含本轮交互修复，需要 WebView2 Runtime |
 
 升级前先退出正在运行的旧版。Release 同时提供 EXE 的 `.sha256` 和汇总 `SHA256SUMS.txt`。历史 v0.2.1 双版本仍在旧 Release 中保留。
 

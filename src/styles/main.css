@@ -221,6 +221,7 @@ a {
     "titlebar titlebar"
     "rail main";
   height: 100vh;
+  transition: grid-template-columns 240ms cubic-bezier(.22, .61, .36, 1);
 }
 
 .app-shell.is-rail-expanded { --rail-w: 200px; }
@@ -330,6 +331,20 @@ a {
 .rail__brand-copy small { font-size: 11px; color: var(--text-muted); }
 .rail__glyph { display: grid; place-items: center; width: 48px; height: 100%; flex: none; }
 .rail__label { min-width: 0; padding-left: 4px; white-space: nowrap; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; }
+.rail__brand-copy, .rail__label {
+  min-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(-4px);
+  transition: opacity 100ms ease-out, transform 160ms ease-out, visibility 0s linear 100ms;
+}
+.rail--expanded :is(.rail__brand-copy, .rail__label) {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(0);
+  transition: opacity 140ms ease-out 55ms, transform 180ms ease-out 35ms, visibility 0s;
+}
 .rail__toggle {
   display: grid;
   grid-template-columns: 48px minmax(0, 1fr);

@@ -52,11 +52,36 @@ async function main() {
     const before = await origins();
     assert.equal(await page.getByRole('button', { name: '展开菜单', exact: true }).getAttribute('aria-expanded'), 'false');
     await page.getByRole('button', { name: '展开菜单', exact: true }).click();
+    await page.waitForFunction(() => Math.abs(document.querySelector('.rail').getBoundingClientRect().width - 200) < .1);
     assert.deepEqual(await origins(), before);
     await page.getByRole('button', { name: '收起菜单', exact: true }).focus();
     await page.keyboard.press('Enter');
+    await page.waitForFunction(() => Math.abs(document.querySelector('.rail').getBoundingClientRect().width - 72) < .1);
     assert.deepEqual(await origins(), before);
     assert.equal(await page.locator('.rail--expanded').count(), 0);
+
+    const sidebarMotion = [];
+    for (const reverse of [false, false, true]) {
+      const timeline = await page.evaluate(reverse => new Promise(resolve => {
+        const frames = []; const started = performance.now();
+        const rail = document.querySelector('.rail');
+        const toggle = document.querySelector('.rail__toggle');
+        function sample(time) {
+          frames.push({ time: time - started, width: rail.getBoundingClientRect().width,
+            iconX: document.querySelector('.rail__item > .rail__glyph').getBoundingClientRect().x });
+          if (time - started < 440) requestAnimationFrame(sample); else resolve(frames);
+        }
+        requestAnimationFrame(sample); toggle.click();
+        if (reverse) setTimeout(() => toggle.click(), 80);
+      }), reverse);
+      const middle = timeline.filter(frame => frame.width > 73 && frame.width < 199);
+      assert.ok(middle.length >= 5, 'Sidebar must interpolate, not jump between widths');
+      assert.ok(timeline.every(frame => frame.width >= 71.9 && frame.width <= 200.1));
+      assert.ok(timeline.every(frame => Math.abs(frame.iconX - before[0].x) < .1), 'Icons must stay aligned during every animation frame');
+      const finalWidth = sidebarMotion.length === 0 ? 200 : 72;
+      assert.ok(Math.abs(timeline.at(-1).width - finalWidth) < .1);
+      sidebarMotion.push({ reverse, frames: timeline.length, intermediateFrames: middle.length, finalWidth });
+    }
 
     const routes = ['', 'deploy', 'ocs', 'providers', 'questions', 'records', 'stats', 'settings'];
     const measurements = [];
@@ -67,6 +92,7 @@ async function main() {
         await page.locator('.page').waitFor();
         const currentExpanded = await page.locator('.rail__toggle').getAttribute('aria-expanded') === 'true';
         if (currentExpanded !== expanded) await page.locator('.rail__toggle').click();
+        await page.waitForFunction(width => Math.abs(document.querySelector('.rail').getBoundingClientRect().width - width) < .1, expanded ? 200 : 72);
         await page.getByRole('button', { name: theme === 'dark' ? '夜间' : '日间', exact: true }).click();
         await page.waitForTimeout(180);
         const dimensions = await page.evaluate(() => ({
@@ -133,8 +159,9 @@ async function main() {
     await page.emulateMedia({ reducedMotion: 'reduce' }); await rocket.hover();
     assert.equal(await page.locator('.rocket-mark__exhaust').evaluate(el => getComputedStyle(el).display), 'none');
     assert.equal(await page.locator('.rocket-mark').evaluate(el => getComputedStyle(el).transform), 'none');
+    assert.equal(await page.locator('.app-shell').evaluate(el => getComputedStyle(el).transitionDuration), '0s');
     assert.deepEqual(errors, []);
-    const result = { passed: true, screenshots: 65, pages: 8, themes: 2, sidebarStates: 2, sizes: [1160, 900], contextMenuPrevented: true, editingShortcuts: true, controlsHeight: 34, particleCount: 72, reducedMotion: true, cadence, errors, scope: 'Production WebView frontend in Edge; isolated mocked IPC; no paid model calls', measurements };
+    const result = { passed: true, screenshots: 65, pages: 8, themes: 2, sidebarStates: 2, sidebarMotion, sizes: [1160, 900], contextMenuPrevented: true, editingShortcuts: true, controlsHeight: 34, particleCount: 72, reducedMotion: true, cadence, errors, scope: 'Production WebView frontend in Edge; isolated mocked IPC; no paid model calls', measurements };
     await fs.writeFile(path.join(output, 'result.json'), JSON.stringify(result, null, 2));
     console.log(JSON.stringify({ ...result, measurements: undefined }));
   } finally { if (browser) await browser.close(); server.kill(); }

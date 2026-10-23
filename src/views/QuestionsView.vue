@@ -1,13 +1,21 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, reactive, ref } from "vue";
 import { api } from "../api";
 import type { Question, QuestionInput } from "../api/types";
 import AppIcon from "../components/AppIcon.vue";
 import AppModal from "../components/AppModal.vue";
+import QuestionDetails from "../components/QuestionDetails.vue";
+import QuestionTransfer from "../components/QuestionTransfer.vue";
+import { useConfirm } from "../composables/useConfirm";
+import { useLiveRefresh } from "../composables/useLiveRefresh";
 import { useToast } from "../composables/useToast";
 import { formatDate, sourceLabel, typeLabel } from "../utils/format";
 
 const toast = useToast();
+const confirm = useConfirm();
+const selected = ref<Question | null>(null);
+const saving = ref(false);
+let requestId = 0;
 
 const items = ref<Question[]>([]);
 const total = ref(0);
@@ -23,16 +31,20 @@ const form = reactive<QuestionInput>({ id: null, title: "", options: "", qtype: 
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize)));
 
-async function load() {
-  loading.value = true;
+async function load(quiet = false) {
+  const request = ++requestId;
+  if (!quiet) loading.value = true;
   try {
     const res = await api.listQuestions(keyword.value.trim(), source.value, page.value, pageSize);
+    if (request !== requestId) return;
+    if (page.value > 1 && res.items.length === 0) { page.value = Math.max(1, Math.ceil(res.total / pageSize)); await load(quiet); return; }
     items.value = res.items;
     total.value = res.total;
   } catch (e) {
-    toast.fromError(e);
+    if (!quiet) toast.fromError(e);
+    return false;
   } finally {
-    loading.value = false;
+    if (request === requestId) loading.value = false;
   }
 }
 
@@ -60,6 +72,8 @@ function open(item?: Question) {
 }
 
 async function submit() {
+  if (saving.value) return;
+  saving.value = true;
   try {
     await api.saveQuestion({ ...form });
     modal.value = false;
@@ -67,11 +81,11 @@ async function submit() {
     await load();
   } catch (e) {
     toast.fromError(e);
-  }
+  } finally { saving.value = false; }
 }
 
 async function remove(item: Question) {
-  if (!window.confirm("删除这道题？")) return;
+  if (!await confirm({ title: '删除题目？', message: `将删除这道题：${item.title.slice(0, 160)}${item.title.length > 160 ? '…' : ''}`, confirmText: '删除题目', danger: true })) return;
   try {
     await api.deleteQuestion(item.id);
     toast.ok("已删除");
@@ -86,7 +100,7 @@ async function clearAll() {
   clearing.value = true;
   try {
     const all = await api.listQuestions("", "", 1, 1);
-    if (!window.confirm(`清空整个题库？当前共有 ${all.total} 道题（包含未显示的题目，不受搜索词和来源筛选限制）。该操作不可撤销。`)) return;
+    if (!await confirm({ title: '清空整个题库？', message: `当前共有 ${all.total} 道题，包含未显示的题目，不受搜索词和来源筛选限制。该操作不可撤销，建议先导出备份。`, confirmText: '清空全部题目', danger: true })) return;
     await api.clearQuestions();
     toast.ok("题库已清空");
     page.value = 1;
@@ -98,11 +112,12 @@ async function clearAll() {
   }
 }
 
-onMounted(load);
+useLiveRefresh(load);
 </script>
 
 <template>
   <div class="page">
+    <QuestionTransfer @changed="page = 1; load()" />
     <div class="card">
       <div class="card__head">
         <AppIcon name="database" :size="15" />
@@ -150,7 +165,7 @@ onMounted(load);
             </thead>
             <tbody>
               <tr v-for="q in items" :key="q.id">
-                <td><div class="cell-clip">{{ q.title }}</div></td>
+                <td><button class="cell-link" type="button" :aria-label="`查看题目详情：${q.title}`" @click="selected = q"><span class="cell-clip">{{ q.title }}</span></button></td>
                 <td><div class="mono cell-clip">{{ q.answer }}</div></td>
                 <td class="faint small nowrap">{{ typeLabel(q.qtype) }}</td>
                 <td>
@@ -162,10 +177,10 @@ onMounted(load);
                 <td class="num faint small nowrap">{{ formatDate(q.updatedAt) }}</td>
                 <td>
                   <div class="row" style="justify-content: flex-end">
-                    <button class="btn btn--ghost btn--sm" type="button" @click="open(q)">
+                    <button class="btn btn--ghost btn--sm btn--icon" type="button" aria-label="编辑题目" @click="open(q)">
                       <AppIcon name="edit" :size="13" />
                     </button>
-                    <button class="btn btn--ghost btn--sm" type="button" @click="remove(q)">
+                    <button class="btn btn--ghost btn--sm btn--icon" type="button" aria-label="删除题目" @click="remove(q)">
                       <AppIcon name="trash" :size="13" />
                     </button>
                   </div>
@@ -215,8 +230,9 @@ onMounted(load);
       </div>
       <template #foot>
         <button class="btn" type="button" @click="modal = false">取消</button>
-        <button class="btn btn--primary" type="button" @click="submit">保存</button>
+        <button class="btn btn--primary" type="button" :disabled="saving" @click="submit">{{ saving ? '保存中…' : '保存' }}</button>
       </template>
     </AppModal>
+    <QuestionDetails :question="selected" @close="selected = null" />
   </div>
 </template>

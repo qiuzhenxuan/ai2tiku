@@ -9,14 +9,18 @@ const output = path.resolve(process.argv[2] || 'test-results/webview');
 
 async function fixtures() {
   window.testPrefs = {};
+  window.testRevision = 1;
   const records = [{ id: 1, title: '下列关于学习方法的说法，正确的是？', answer: 'A', source: 'cache', provider: '本地题库', model: '', promptTokens: 0, completionTokens: 0, totalTokens: 0, durationMs: 12, createdAt: '2026-10-23T08:00:00Z' }];
   const questions = records.map(r => ({ ...r, options: 'A. 主动回顾\nB. 只读不练\nC. 临时突击\nD. 忽略反馈', qtype: 'single', hits: 12, updatedAt: r.createdAt }));
   const status = { running: true, port: 3100, address: 'http://127.0.0.1:3100' };
+  records.forEach(record => Object.assign(record, { options: questions[0].options, qtype: 'single', status: 'success', error: '', explanation: '', imageCount: 0 }));
+  window.testData = { records, questions, status };
   window.__TAURI_INTERNALS__ = { invoke: async (cmd, args) => {
+    if (cmd === 'data_revision') return window.testRevision;
     if (cmd === 'get_ui_pref') return window.testPrefs[args.key] ?? null;
     if (cmd === 'set_ui_pref') { window.testPrefs[args.key] = args.value; return; }
     if (cmd === 'server_status') return status;
-    if (cmd === 'get_stats') return { questionTotal: 128, cacheHits: 86, aiCalls: 42, hitRate: .672, promptTokens: 18240, completionTokens: 3240, totalTokens: 21480, todayCount: 24, todayTokens: 3120, trend: [{ date: '2026-10-22', count: 12, tokens: 1200 }, { date: '2026-10-23', count: 24, tokens: 3120 }], modelUsage: [{ model: 'glm-4-flash', count: 32, tokens: 15400 }] };
+    if (cmd === 'get_stats') return { successCount: 123, failureCount: 5, successRate: 123 / 128, questionTotal: 128, cacheHits: 86, aiCalls: 42, hitRate: .672, promptTokens: 18240, completionTokens: 3240, totalTokens: 21480, todayCount: 24, todayTokens: 3120, trend: [{ date: '2026-10-22', count: 12, tokens: 1200 }, { date: '2026-10-23', count: 24, tokens: 3120 }], modelUsage: [{ model: 'glm-4-flash', count: 32, tokens: 15400 }] };
     if (cmd === 'list_records') return { items: records, total: 1, page: 1, pageSize: 15 };
     if (cmd === 'list_questions') return { items: questions, total: 1, page: 1, pageSize: 15 };
     if (['list_providers', 'list_models', 'list_provider_presets'].includes(cmd)) return [];
@@ -185,4 +189,5 @@ async function main() {
     console.log(JSON.stringify({ ...result, measurements: undefined }));
   } finally { if (browser) await browser.close(); server.kill(); }
 }
-main().catch(error => { console.error(error); process.exitCode = 1; });
+if (require.main === module) main().catch(error => { console.error(error); process.exitCode = 1; });
+module.exports = { fixtures };

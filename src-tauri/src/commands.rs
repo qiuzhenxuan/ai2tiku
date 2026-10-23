@@ -149,6 +149,62 @@ pub fn get_stats(state: State<'_, SharedState>) -> R<Stats> {
     state.db.stats()
 }
 
+#[tauri::command]
+pub fn data_revision(state: State<'_, SharedState>) -> u64 {
+    state.db.revision()
+}
+
+#[tauri::command]
+pub async fn export_question_file(
+    app: tauri::AppHandle,
+    state: State<'_, SharedState>,
+) -> R<Option<String>> {
+    let content = export_questions_json(state).await?;
+    crate::transfer::save_dialog(app, content).await
+}
+#[tauri::command]
+pub async fn export_questions_json(state: State<'_, SharedState>) -> R<String> {
+    let shared = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || shared.db.export_questions())
+        .await
+        .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+pub async fn pick_question_file(app: tauri::AppHandle) -> R<Option<(String, String)>> {
+    crate::transfer::open_dialog(app).await
+}
+#[tauri::command]
+pub async fn preview_question_import(
+    state: State<'_, SharedState>,
+    content: String,
+) -> R<crate::transfer::ImportPreview> {
+    let shared = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || shared.db.preview_questions(&content))
+        .await
+        .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+pub async fn apply_question_import(
+    state: State<'_, SharedState>,
+    content: String,
+    mode: String,
+    snapshot: String,
+) -> R<crate::transfer::ImportResult> {
+    let shared = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        shared.db.import_questions(&content, &mode, &snapshot)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+pub async fn run_diagnostics(
+    state: State<'_, SharedState>,
+    include_model: bool,
+) -> R<crate::diagnostics::DiagnosticReport> {
+    Ok(crate::diagnostics::run(state.inner(), include_model).await)
+}
+
 // ---------- OCS 题库配置 ----------
 
 #[tauri::command]

@@ -1,10 +1,13 @@
 use crate::models::*;
 use rusqlite::{params, Connection, OptionalExtension};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 
 /// 本地存储：题库、记录、供应商、模型、设置
 pub struct Db {
     conn: Mutex<Connection>,
+    pub(crate) path: std::path::PathBuf,
+    revision: AtomicU64,
 }
 
 /// 只统一空白并移除明确包裹的题型标签；符号、数字和大小写均可能影响语义。
@@ -96,7 +99,7 @@ pub(crate) fn option_texts(options: &str) -> Vec<String> {
 }
 
 /// 选项签名：与顺序无关，用于判断两次请求是不是「同一组选项」（乱序也算同一组）
-fn option_signature(options: &str) -> String {
+pub(crate) fn option_signature(options: &str) -> String {
     let mut texts = option_texts(options);
     texts.sort();
     texts.join("\u{1}")
@@ -155,7 +158,11 @@ fn remap_letter_answer(
 }
 
 /// 一条缓存能否用于当前这组选项；可以则返回该直接使用的答案
-fn answer_for_options(q: &Question, current_options: &str, qtype: &str) -> Option<String> {
+pub(crate) fn answer_for_options(
+    q: &Question,
+    current_options: &str,
+    qtype: &str,
+) -> Option<String> {
     if qtype.is_empty()
         || qtype == "unknown"
         || q.qtype != qtype
@@ -261,6 +268,32 @@ impl Db {
         )
         .map_err(err)?;
 
+        // Older records cannot recover missing request details, but empty answers
+        // must not masquerade as successful calls after upgrading.
+        let columns = {
+            let mut stmt = conn.prepare("PRAGMA table_info(records)").map_err(err)?;
+            let rows = stmt
+                .query_map([], |row| row.get::<_, String>(1))
+                .map_err(err)?;
+            rows.collect::<Result<Vec<_>, _>>().map_err(err)?
+        };
+        for (name, definition) in [
+            ("options", "TEXT NOT NULL DEFAULT ''"),
+            ("qtype", "TEXT NOT NULL DEFAULT 'unknown'"),
+            ("status", "TEXT NOT NULL DEFAULT 'success'"),
+            ("error", "TEXT NOT NULL DEFAULT ''"),
+            ("explanation", "TEXT NOT NULL DEFAULT ''"),
+            ("image_count", "INTEGER NOT NULL DEFAULT 0"),
+        ] {
+            if !columns.iter().any(|column| column == name) {
+                conn.execute_batch(&format!(
+                    "ALTER TABLE records ADD COLUMN {name} {definition};"
+                ))
+                .map_err(err)?;
+            }
+        }
+        conn.execute("UPDATE records SET status='failure', error='旧版未保存失败详情' WHERE trim(answer)='' AND status='success'", []).map_err(err)?;
+
         // 一次性迁移：旧版默认 max_tokens 是 1024，模型偶尔先写一段分析就会撞上限被截断，
         // 导致整题漏答。新默认值改为 2048。
         // 只升级「仍等于旧默认值」的行，用户自己调过的数值不动；标记写进 settings，
@@ -323,11 +356,20 @@ impl Db {
 
         Ok(Self {
             conn: Mutex::new(conn),
+            path: path.to_path_buf(),
+            revision: AtomicU64::new(1),
         })
     }
 
-    fn lock(&self) -> R<std::sync::MutexGuard<'_, Connection>> {
+    pub(crate) fn lock(&self) -> R<std::sync::MutexGuard<'_, Connection>> {
         self.conn.lock().map_err(|e| e.to_string())
+    }
+
+    pub fn revision(&self) -> u64 {
+        self.revision.load(Ordering::Acquire)
+    }
+    pub(crate) fn changed(&self) {
+        self.revision.fetch_add(1, Ordering::AcqRel);
     }
 
     // ---------- 设置 ----------
@@ -789,6 +831,7 @@ impl Db {
                     params![input.title, key, options, qtype, input.answer, now(), id],
                 )
                 .map_err(err)?;
+                self.changed();
                 Ok(id)
             }
             None => {
@@ -798,6 +841,7 @@ impl Db {
                     params![input.title, key, options, qtype, input.answer, now()],
                 )
                 .map_err(err)?;
+                self.changed();
                 Ok(conn.last_insert_rowid())
             }
         }
@@ -847,6 +891,7 @@ impl Db {
                     params![options, answer, provider, model, now(), id],
                 )
                 .map_err(err)?;
+                self.changed();
                 Ok(id)
             }
             None => {
@@ -856,6 +901,7 @@ impl Db {
                     params![title, key, options, qtype, answer, provider, model, now()],
                 )
                 .map_err(err)?;
+                self.changed();
                 Ok(conn.last_insert_rowid())
             }
         }
@@ -865,12 +911,14 @@ impl Db {
         let conn = self.lock()?;
         conn.execute("DELETE FROM questions WHERE id = ?1", params![id])
             .map_err(err)?;
+        self.changed();
         Ok(())
     }
 
     pub fn clear_questions(&self) -> R<()> {
         let conn = self.lock()?;
         conn.execute("DELETE FROM questions", []).map_err(err)?;
+        self.changed();
         Ok(())
     }
 
@@ -886,6 +934,7 @@ impl Db {
 
     // ---------- 记录 ----------
 
+    #[cfg(feature = "native")]
     #[allow(clippy::too_many_arguments)]
     pub fn add_record(
         &self,
@@ -898,24 +947,34 @@ impl Db {
         completion_tokens: i64,
         duration_ms: i64,
     ) -> R<i64> {
+        self.record(&SearchRecord {
+            title: title.into(),
+            answer: answer.into(),
+            source: source.into(),
+            provider: provider.into(),
+            model: model.into(),
+            prompt_tokens,
+            completion_tokens,
+            total_tokens: prompt_tokens + completion_tokens,
+            duration_ms,
+            status: if answer.is_empty() {
+                "failure"
+            } else {
+                "success"
+            }
+            .into(),
+            ..Default::default()
+        })
+    }
+
+    pub fn record(&self, record: &SearchRecord) -> R<i64> {
         let conn = self.lock()?;
         conn.execute(
-            "INSERT INTO records(title, answer, source, provider, model, prompt_tokens, completion_tokens, total_tokens, duration_ms, created_at)
-             VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)",
-            params![
-                title,
-                answer,
-                source,
-                provider,
-                model,
-                prompt_tokens,
-                completion_tokens,
-                prompt_tokens + completion_tokens,
-                duration_ms,
-                now()
-            ],
-        )
-        .map_err(err)?;
+            "INSERT INTO records(title,answer,source,provider,model,prompt_tokens,completion_tokens,total_tokens,duration_ms,created_at,options,qtype,status,error,explanation,image_count)
+             VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16)",
+            params![record.title,record.answer,record.source,record.provider,record.model,record.prompt_tokens,record.completion_tokens,record.total_tokens,record.duration_ms,now(),record.options,record.qtype,record.status,record.error,record.explanation,record.image_count],
+        ).map_err(err)?;
+        self.changed();
         Ok(conn.last_insert_rowid())
     }
 
@@ -927,7 +986,7 @@ impl Db {
         let mut stmt = conn
             .prepare(
                 "SELECT id, title, answer, source, provider, model, prompt_tokens, completion_tokens,
-                        total_tokens, duration_ms, created_at
+                        total_tokens, duration_ms, created_at, options, qtype, status, error, explanation, image_count
                  FROM records ORDER BY id DESC LIMIT ?1 OFFSET ?2",
             )
             .map_err(err)?;
@@ -945,6 +1004,12 @@ impl Db {
                     total_tokens: r.get(8)?,
                     duration_ms: r.get(9)?,
                     created_at: r.get(10)?,
+                    options: r.get(11)?,
+                    qtype: r.get(12)?,
+                    status: r.get(13)?,
+                    error: r.get(14)?,
+                    explanation: r.get(15)?,
+                    image_count: r.get(16)?,
                 })
             })
             .map_err(err)?
@@ -961,6 +1026,7 @@ impl Db {
     pub fn clear_records(&self) -> R<()> {
         let conn = self.lock()?;
         conn.execute("DELETE FROM records", []).map_err(err)?;
+        self.changed();
         Ok(())
     }
 
@@ -968,6 +1034,10 @@ impl Db {
 
     pub fn stats(&self) -> R<Stats> {
         let conn = self.lock()?;
+        let (success_count, failure_count): (i64, i64) = conn.query_row(
+            "SELECT COALESCE(SUM(status='success'),0),COALESCE(SUM(status='failure'),0) FROM records", [],
+            |r| Ok((r.get(0)?,r.get(1)?)),
+        ).map_err(err)?;
         let question_total: i64 = conn
             .query_row("SELECT COUNT(*) FROM questions", [], |r| r.get(0))
             .map_err(err)?;
@@ -1052,8 +1122,15 @@ impl Db {
             .collect::<Result<Vec<_>, _>>()
             .map_err(err)?;
 
-        let calls = cache_hits + ai_calls;
+        let calls = success_count + failure_count;
         Ok(Stats {
+            success_count,
+            failure_count,
+            success_rate: if calls > 0 {
+                success_count as f64 / calls as f64
+            } else {
+                0.0
+            },
             question_total,
             cache_hits,
             ai_calls,

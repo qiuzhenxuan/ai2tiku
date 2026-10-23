@@ -1,6 +1,6 @@
 [package]
 name = "ai2tiku"
-version = "0.2.4"
+version = "0.2.5"
 description = "AI 驱动的 OCS 题库服务：把大模型接入 OCS 网课助手"
 authors = ["ai2tiku"]
 edition = "2021"
@@ -13,7 +13,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 [features]
 default = ["webview"]
 native = ["dep:eframe", "dep:image", "dep:dirs", "dep:arboard"]
-webview = ["dep:tauri", "dep:tauri-plugin-opener", "dep:tauri-plugin-clipboard-manager", "dep:tauri-build"]
+webview = ["dep:tauri", "dep:tauri-plugin-opener", "dep:tauri-plugin-clipboard-manager", "dep:tauri-plugin-dialog", "dep:tauri-build"]
 custom-protocol = ["tauri?/custom-protocol"]
 
 [build-dependencies]
@@ -24,6 +24,7 @@ tauri-winres = "0.3.6"
 tauri = { version = "2", features = [], optional = true }
 tauri-plugin-opener = { version = "2", optional = true }
 tauri-plugin-clipboard-manager = { version = "2", optional = true }
+tauri-plugin-dialog = { version = "2", optional = true }
 eframe = { version = "=0.33.3", default-features = false, features = ["accesskit", "default_fonts", "glow", "x11", "wayland"], optional = true }
 image = { version = "0.25", default-features = false, features = ["png"], optional = true }
 dirs = { version = "7", optional = true }

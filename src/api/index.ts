@@ -17,6 +17,7 @@ import type {
   Settings,
   Stats,
   SyncModelsResult,
+  ImportPreview, ImportResult, DiagnosticReport,
 } from "./types";
 
 /** Tauri 命令封装，前端只通过这里访问后端 */
@@ -63,6 +64,12 @@ export const api = {
   saveQuestion: (input: QuestionInput) => invoke<number>("save_question", { input }),
   deleteQuestion: (id: number) => invoke<void>("delete_question", { id }),
   clearQuestions: () => invoke<void>("clear_questions"),
+  exportQuestionFile: () => invoke<string | null>("export_question_file"),
+  pickQuestionFile: () => invoke<[string, string] | null>("pick_question_file"),
+  previewQuestionImport: (content: string) => invoke<ImportPreview>("preview_question_import", { content }),
+  applyQuestionImport: (content: string, mode: 'merge' | 'replace', snapshot: string) => invoke<ImportResult>("apply_question_import", { content, mode, snapshot }),
+  dataRevision: () => invoke<number>("data_revision"),
+  runDiagnostics: (includeModel = false) => invoke<DiagnosticReport>("run_diagnostics", { includeModel }),
 
   // 记录与统计
   listRecords: (page: number, pageSize: number) =>

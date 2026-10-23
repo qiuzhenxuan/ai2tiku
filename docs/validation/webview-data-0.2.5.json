@@ -1,0 +1,20 @@
+{
+  "passed": true,
+  "screenshots": 10,
+  "liveRevisionRefresh": true,
+  "unchangedRevisionNoReload": true,
+  "hiddenPollingSuspended": true,
+  "failedRefreshRetried": true,
+  "longQuestionAndOptions": true,
+  "failureDetails": true,
+  "drawerFocusTrapAndRestore": true,
+  "inAppConfirmation": true,
+  "safeCancel": true,
+  "exportAndImportPreview": true,
+  "restoreConfirmationAndBackupPath": true,
+  "invalidImportBlocked": true,
+  "localDiagnosisNoModelCalls": true,
+  "paidDiagnosisExplicitConfirmation": true,
+  "errors": [],
+  "scope": "Production Vue UI in Edge, isolated IPC fixtures; no paid model calls"
+}

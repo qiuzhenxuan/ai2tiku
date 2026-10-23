@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
+import { useConfirm } from "../composables/useConfirm";
 import { useRoute } from "vue-router";
 import { api } from "../api";
 import type {
@@ -129,7 +130,7 @@ async function submitProvider() {
 }
 
 async function removeProvider(item: Provider) {
-  if (!window.confirm(`删除供应商「${item.name}」及其下所有模型？`)) return;
+  if (!await useConfirm()({ title: '删除供应商？', message: `将删除供应商「${item.name}」及其下所有模型。`, confirmText: '删除供应商', danger: true })) return;
   try {
     await api.deleteProvider(item.id);
     toast.ok("已删除");
@@ -169,7 +170,7 @@ async function submitModel() {
 }
 
 async function removeModel(item: AiModel) {
-  if (!window.confirm(`删除模型「${item.displayName || item.model}」？`)) return;
+  if (!await useConfirm()({ title: '删除模型？', message: `将删除模型「${item.displayName || item.model}」。`, confirmText: '删除模型', danger: true })) return;
   try {
     await api.deleteModel(item.id);
     toast.ok("已删除");

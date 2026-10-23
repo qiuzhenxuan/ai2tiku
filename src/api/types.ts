@@ -73,6 +73,12 @@ export interface SearchRecord {
   totalTokens: number;
   durationMs: number;
   createdAt: string;
+  options: string;
+  qtype: string;
+  status: 'success' | 'failure';
+  error: string;
+  explanation: string;
+  imageCount: number;
 }
 
 export interface Page<T> {
@@ -151,6 +157,9 @@ export interface ModelUsage {
 }
 
 export interface Stats {
+  successCount: number;
+  failureCount: number;
+  successRate: number;
   questionTotal: number;
   cacheHits: number;
   aiCalls: number;
@@ -163,6 +172,14 @@ export interface Stats {
   trend: TrendPoint[];
   modelUsage: ModelUsage[];
 }
+
+export interface ImportPreview {
+  total: number; valid: number; invalid: number; newCount: number; duplicates: number;
+  conflicts: number; fileDuplicates: number; fileConflicts: number; existing: number; errors: string[]; snapshot: string;
+}
+export interface ImportResult { imported: number; skipped: number; total: number; backupPath: string }
+export interface DiagnosticItem { name: string; status: 'pass' | 'warn' | 'fail' | 'skip'; detail: string; durationMs: number }
+export interface DiagnosticReport { checkedAt: string; items: DiagnosticItem[]; modelCalled: boolean; tokens: number }
 
 export interface SearchOutcome {
   code: number;

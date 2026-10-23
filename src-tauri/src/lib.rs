@@ -12,6 +12,7 @@ mod browser;
 #[cfg(feature = "webview")]
 mod commands;
 mod db;
+mod diagnostics;
 mod models;
 #[cfg(feature = "native")]
 mod native;
@@ -21,6 +22,9 @@ mod search;
 mod server;
 mod services;
 mod state;
+#[cfg(test)]
+mod test_support;
+mod transfer;
 
 #[cfg(feature = "webview")]
 use state::{AppState, SharedState};
@@ -44,6 +48,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let args: Vec<_> = std::env::args_os().collect();
             let dir = args
@@ -123,6 +128,13 @@ pub fn run() {
             commands::list_records,
             commands::clear_records,
             commands::get_stats,
+            commands::data_revision,
+            commands::export_question_file,
+            commands::export_questions_json,
+            commands::pick_question_file,
+            commands::preview_question_import,
+            commands::apply_question_import,
+            commands::run_diagnostics,
             commands::build_ocs_config,
             commands::list_provider_presets,
             commands::fetch_models,

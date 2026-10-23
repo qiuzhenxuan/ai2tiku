@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { ref } from "vue";
 import { api } from "../api";
 import type { SearchRecord, ServerStatus, Stats } from "../api/types";
 import AppIcon from "../components/AppIcon.vue";
 import BarList from "../components/BarList.vue";
 import StatCard from "../components/StatCard.vue";
 import { useToast } from "../composables/useToast";
+import { useLiveRefresh } from "../composables/useLiveRefresh";
+import QuestionDetails from "../components/QuestionDetails.vue";
 import { compactNumber, formatDate, formatPercent, sourceLabel } from "../utils/format";
 
 const toast = useToast();
@@ -13,8 +15,9 @@ const stats = ref<Stats | null>(null);
 const status = ref<ServerStatus | null>(null);
 const recent = ref<SearchRecord[]>([]);
 const busy = ref(false);
+const selected = ref<SearchRecord | null>(null);
 
-async function load() {
+async function load(quiet = false) {
   try {
     const [s, st, rec] = await Promise.all([
       api.getStats(),
@@ -25,7 +28,8 @@ async function load() {
     status.value = st;
     recent.value = rec.items;
   } catch (e) {
-    toast.fromError(e);
+    if (!quiet) toast.fromError(e);
+    return false;
   }
 }
 
@@ -42,11 +46,17 @@ async function toggleServer() {
   }
 }
 
-onMounted(load);
+const { liveConnected } = useLiveRefresh(load);
 </script>
 
 <template>
   <div class="page">
+    <div class="page-tools"><span class="faint small">{{ liveConnected ? '数据随答题结果自动更新' : '实时连接中断，正在重试' }}</span><RouterLink class="btn" :to="{ path: '/settings', query: { diagnose: '1' } }">一键诊断</RouterLink></div>
+    <div class="grid grid--3">
+      <StatCard label="成功请求" :value="stats?.successCount ?? 0" icon="check" />
+      <StatCard label="失败请求" :value="stats?.failureCount ?? 0" icon="info" />
+      <StatCard label="答题成功率" :value="formatPercent(stats?.successRate ?? 0)" icon="bolt" />
+    </div>
     <div class="grid grid--4">
       <StatCard
         label="今日搜题"
@@ -145,7 +155,7 @@ onMounted(load);
           </thead>
           <tbody>
             <tr v-for="r in recent" :key="r.id">
-              <td><div class="cell-clip">{{ r.title }}</div></td>
+              <td><button class="cell-link" type="button" @click="selected = r"><span class="cell-clip">{{ r.title || '（空题目）' }}</span></button><span v-if="r.status === 'failure'" class="badge badge--warn">失败</span></td>
               <td>
                 <span class="badge" :class="r.source === 'cache' ? 'badge--ok' : 'badge--ai'">
                   {{ sourceLabel(r.source) }}
@@ -159,5 +169,6 @@ onMounted(load);
         </table>
       </div>
     </div>
+    <QuestionDetails :record="selected" @close="selected = null" />
   </div>
 </template>

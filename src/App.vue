@@ -5,6 +5,7 @@ import AppSidebar from "./components/AppSidebar.vue";
 import TitleBar from "./components/TitleBar.vue";
 import ThemeToggle from "./components/ThemeToggle.vue";
 import ToastHost from "./components/ToastHost.vue";
+import ConfirmHost from "./components/ConfirmHost.vue";
 import { api } from "./api";
 import type { ServerStatus } from "./api/types";
 
@@ -15,28 +16,33 @@ const desc = computed(() => (route.meta.desc as string) ?? "");
 const status = ref<ServerStatus | null>(null);
 const sidebarExpanded = ref(false);
 let timer: number | undefined;
+let refreshingStatus = false;
 
 function preventBrowserMenu(event: Event) {
   event.preventDefault();
 }
 
 async function refreshStatus() {
+  if (document.hidden || refreshingStatus) return;
+  refreshingStatus = true;
   try {
     status.value = await api.serverStatus();
   } catch {
     status.value = null;
-  }
+  } finally { refreshingStatus = false; }
 }
 
 onMounted(() => {
   // Capture also covers modal content teleported outside the app-shell.
   document.addEventListener("contextmenu", preventBrowserMenu, true);
+  window.addEventListener("focus", refreshStatus);
   refreshStatus();
   timer = window.setInterval(refreshStatus, 5000);
 });
 
 onUnmounted(() => {
   document.removeEventListener("contextmenu", preventBrowserMenu, true);
+  window.removeEventListener("focus", refreshStatus);
   if (timer) window.clearInterval(timer);
 });
 </script>
@@ -70,5 +76,6 @@ onUnmounted(() => {
     </div>
 
     <ToastHost />
+    <ConfirmHost />
   </div>
 </template>

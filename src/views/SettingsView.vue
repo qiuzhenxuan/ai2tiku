@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import DiagnosticsCard from "../components/DiagnosticsCard.vue";
 import { computed, onMounted, reactive, ref } from "vue";
 import { api } from "../api";
 import type { ServerStatus } from "../api/types";
@@ -104,6 +105,7 @@ onMounted(load);
 
 <template>
   <div class="page">
+    <DiagnosticsCard />
     <div class="card">
       <div class="card__head">
         <AppIcon name="sun" :size="15" />

@@ -47,7 +47,19 @@ async fn status_handler(State(state): State<SharedState>) -> Json<ServerStatus> 
 }
 
 /// GET /api/search?title=...&type=...&options=...
-async fn search_get(State(state): State<SharedState>, Query(q): Query<SearchQuery>) -> Json<Value> {
+async fn search_get(
+    State(state): State<SharedState>,
+    query: Result<Query<SearchQuery>, axum::extract::rejection::QueryRejection>,
+) -> Json<Value> {
+    let q = match query {
+        Ok(Query(q)) => q,
+        Err(_) => {
+            return Json(to_ocs_payload(&crate::search::invalid_request(
+                &state,
+                "查询参数解析失败，请检查题目字段格式",
+            )))
+        }
+    };
     let outcome = crate::search::answer(&state, &q).await;
     Json(to_ocs_payload(&outcome))
 }
@@ -55,17 +67,27 @@ async fn search_get(State(state): State<SharedState>, Query(q): Query<SearchQuer
 /// POST /api/search
 /// body: {"title":"...","type":"single","options":"A. xx\nB. yy"}
 /// 图片题时另带 images（base64 数组）/ suggestion_title / suggestion_options
-async fn search_post(State(state): State<SharedState>, body: Bytes) -> Json<Value> {
+async fn search_post(
+    State(state): State<SharedState>,
+    body: Result<Bytes, axum::extract::rejection::BytesRejection>,
+) -> Json<Value> {
+    let body = match body {
+        Ok(body) => body,
+        Err(_) => {
+            return Json(to_ocs_payload(&crate::search::invalid_request(
+                &state,
+                "读取请求体失败：请求可能超过 32MB 上限",
+            )))
+        }
+    };
     // 解析失败时要说清楚，不能静默当成「空题目」——那样只会白白丢一道题
     let q: SearchQuery = match serde_json::from_slice(&body) {
         Ok(q) => q,
-        Err(e) => {
-            return Json(json!({
-                "code": 0,
-                "source": "none",
-                "durationMs": 0,
-                "msg": format!("请求体解析失败：{}", e),
-            }))
+        Err(_) => {
+            return Json(to_ocs_payload(&crate::search::invalid_request(
+                &state,
+                "请求体解析失败，请使用正确的 JSON 题目字段格式",
+            )))
         }
     };
     let outcome = crate::search::answer(&state, &q).await;
@@ -85,6 +107,7 @@ fn to_ocs_payload(outcome: &crate::models::SearchOutcome) -> Value {
             "tokens": outcome.tokens,
             "durationMs": outcome.duration_ms,
             "explanation": outcome.explanation,
+            "msg": outcome.msg,
         })
     } else {
         json!({

@@ -174,6 +174,7 @@ async function openPermissions() {
             </span>
           </div>
           <template v-if="result.code === 1">
+            <div v-if="result.msg" class="callout callout--warn">{{ result.msg }}</div>
             <div class="result__row">
               <span class="faint small">题目</span>
               <span>{{ result.question ?? "-" }}</span>

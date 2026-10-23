@@ -77,7 +77,7 @@ pub struct QuestionInput {
 }
 
 /// 一次搜题的调用记录
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchRecord {
     pub id: i64,
@@ -91,6 +91,18 @@ pub struct SearchRecord {
     pub total_tokens: i64,
     pub duration_ms: i64,
     pub created_at: String,
+    #[serde(default)]
+    pub options: String,
+    #[serde(default)]
+    pub qtype: String,
+    #[serde(default)]
+    pub status: String,
+    #[serde(default)]
+    pub error: String,
+    #[serde(default)]
+    pub explanation: String,
+    #[serde(default)]
+    pub image_count: i64,
 }
 
 /// 分页返回
@@ -169,6 +181,9 @@ pub struct ModelUsage {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Stats {
+    pub success_count: i64,
+    pub failure_count: i64,
+    pub success_rate: f64,
     pub question_total: i64,
     pub cache_hits: i64,
     pub ai_calls: i64,

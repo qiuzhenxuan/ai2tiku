@@ -12,8 +12,10 @@ OCS 脚本通过标准的「题库配置」调用它。**先用本地题库匹�
 
 ## 更新记录
 
-2026-10-23（v0.2.4，WebView 主版本）：默认使用 Vue + Tauri 界面，关闭浏览器右键菜单，并将 0.2.1 的折叠侧栏、连续火箭尾焰和控件反馈同步到 WebView。菜单默认仅显示图标，点击顶部按钮平滑展开、收起，文字渐显且图标保持原位；切换按钮悬停或键盘聚焦时按展开 / 收起方向轻推箭头；常规按钮和单行字段统一 34px 高度，支持键盘聚焦和减少动态效果。保留黑白水墨视觉、毛笔无限标志和已有业务修复，继续读取原数据库。
+2026-10-23（v0.2.5，WebView 主版本）：新增完整失败追踪、题库 JSON 备份与导入恢复、概览和记录实时更新、一键诊断、统一确认框及长题详情抽屉。保留黑白水墨视觉、毛笔无限标志、平滑折叠侧栏、方向引导、连续尾焰与控件反馈，继续读取原数据库。
 详细变化、升级说明与验证结果见 [更新日志](CHANGELOG.md)。
+
+题库备份不包含 API Key 或应用配置，恢复前自动备份；实际模型诊断可能产生费用，需单独确认。见 [使用说明](docs/data-tools.md)。
 
 ## 功能
 
@@ -26,8 +28,10 @@ OCS 脚本通过标准的「题库配置」调用它。**先用本地题库匹�
 - **AI 供应商与模型自定义** —— 任何 OpenAI 兼容服务，可增删模型、设默认、测连通性
 - **本地题库管理与缓存** —— 精确核对题干、题型和完整选项，支持增删改查和乱序选项映射
 - **答案格式校验** —— 按题型检查答案格式、选项范围和回复完整性，失败结果不作为有效答案缓存
-- **答题记录** —— 查看已记录请求的来源、模型、耗时与 Token；部分失败路径尚未留痕
-- **统计看板** —— 缓存命中率、Token 消耗趋势、按模型用量分布
+- **答题记录** —— 完整记录成功 / 失败、原因、选项、模型、耗时与已返回 Token；点击题干查看详情
+- **统计看板** —— 成功率、失败次数、缓存命中率、Token 消耗趋势与模型用量；数据变化后自动更新
+- **题库迁移** —— JSON 整库备份、导入预览、冲突识别、合并与恢复前自动备份
+- **一键诊断** —— 检查本地服务与模型配置，实际模型调用需确认可能产生费用
 - **水墨视觉** —— 毛笔无限标志统一桌面图标与应用 Logo；黑白日夜配色，淡墨山形与纸张纤维背景
 - **侧栏交互** —— 默认图标栏，点击展开文字菜单；独立动效与连续喷流的竖直火箭，支持键盘聚焦和减少动态效果
 - **控件反馈** —— 黑白悬停、按下与焦点状态，可点击控件显示手型；统一按钮和单行表单尺寸
@@ -45,7 +49,7 @@ WebView 主版本的黑白水墨主题（演示数据）：
 | --- | --- |
 | ![本地题库](docs/screenshots/questions.png) | ![夜间概览](docs/screenshots/dashboard-dark.png) |
 
-侧栏默认显示图标，点击顶部展开按钮可查看文字菜单：[展开效果](docs/screenshots/questions-expanded.png)。验证范围见 [WebView 验证记录](docs/webview-validation-0.2.4.md)。
+侧栏默认显示图标，点击顶部展开按钮可查看文字菜单：[展开效果](docs/screenshots/questions-expanded.png)。验证范围见 [WebView 验证记录](docs/webview-validation-0.2.5.md)。
 
 ## 技术栈
 
@@ -59,11 +63,11 @@ WebView 主版本的黑白水墨主题（演示数据）：
 
 ## 下载
 
-去 [v0.2.4 Release](https://github.com/qiuzhenxuan/ai2tiku/releases/tag/v0.2.4) 下载 Windows x64 主版本：
+去 [v0.2.5 Release](https://github.com/qiuzhenxuan/ai2tiku/releases/tag/v0.2.5) 下载 Windows x64 主版本：
 
 | 文件 | 界面与运行要求 |
 | --- | --- |
-| [ai2tiku-webview-windows-x64.exe](https://github.com/qiuzhenxuan/ai2tiku/releases/download/v0.2.4/ai2tiku-webview-windows-x64.exe) | Vue + Tauri 界面，包含本轮交互修复，需要 WebView2 Runtime |
+| [ai2tiku-webview-windows-x64.exe](https://github.com/qiuzhenxuan/ai2tiku/releases/download/v0.2.5/ai2tiku-webview-windows-x64.exe) | Vue + Tauri 界面，包含本轮交互修复，需要 WebView2 Runtime |
 
 升级前先退出正在运行的旧版。Release 同时提供 EXE 的 `.sha256` 和汇总 `SHA256SUMS.txt`。历史 v0.2.1 双版本仍在旧 Release 中保留。
 

@@ -1,6 +1,12 @@
 mod ai;
 #[cfg(not(any(feature = "native", feature = "webview")))]
-compile_error!("请启用 native 或 webview 功能，默认使用 native 原生界面");
+compile_error!("请启用 webview 或 native 功能，默认使用 WebView 界面");
+#[cfg(all(
+    feature = "webview",
+    not(debug_assertions),
+    not(feature = "custom-protocol")
+))]
+compile_error!("WebView Release 需要 --features custom-protocol，以嵌入生产界面资源");
 mod answers;
 mod browser;
 #[cfg(feature = "webview")]
@@ -39,13 +45,34 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .setup(|app| {
-            let dir = app.path().app_data_dir()?;
+            let args: Vec<_> = std::env::args_os().collect();
+            let dir = args
+                .windows(2)
+                .find(|pair| pair[0] == "--data-dir")
+                .map(|pair| std::path::PathBuf::from(&pair[1]))
+                .map(Ok)
+                .unwrap_or_else(|| app.path().app_data_dir())?;
             let db = db::Db::open(&dir.join("ai2tiku.db"))?;
             let shared: SharedState = Arc::new(AppState::new(db));
             app.manage(shared.clone());
 
             // 高 DPI 下窗口的物理尺寸会放大，按屏幕可用区域收敛一下，避免超出屏幕
             if let Some(win) = app.get_webview_window("main") {
+                // Disable the embedded browser menu at its source. The Vue shell also
+                // cancels contextmenu events; text editing shortcuts stay available.
+                #[cfg(windows)]
+                if let Err(error) = win.with_webview(|webview| unsafe {
+                    if let Err(error) = webview
+                        .controller()
+                        .CoreWebView2()
+                        .and_then(|core| core.Settings())
+                        .and_then(|settings| settings.SetAreDefaultContextMenusEnabled(false))
+                    {
+                        eprintln!("[ai2tiku] 关闭 WebView2 默认右键菜单失败：{error}");
+                    }
+                }) {
+                    eprintln!("[ai2tiku] 配置 WebView2 失败：{error}");
+                }
                 if let Ok(Some(monitor)) = win.current_monitor() {
                     let scale = monitor.scale_factor();
                     let area = monitor.work_area();

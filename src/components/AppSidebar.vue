@@ -3,6 +3,17 @@ import { ref } from "vue";
 import { routes } from "../router";
 import AppIcon from "./AppIcon.vue";
 import AppLogo from "./AppLogo.vue";
+import RocketMark from "./RocketMark.vue";
+
+defineProps<{ expanded: boolean }>();
+const emit = defineEmits<{ toggle: [] }>();
+
+function toggle() {
+  hovered.value = "";
+  focused.value = "";
+  dismissed.value = true;
+  emit("toggle");
+}
 
 const ICON_MAP: Record<string, string> = {
   dashboard: "dashboard",
@@ -50,10 +61,24 @@ function moveFocus(event: KeyboardEvent) {
 </script>
 
 <template>
-  <aside class="rail">
-    <div class="rail__brand" title="ai2tiku · OCS 智能题库" aria-label="ai2tiku · 无限墨环"><AppLogo /></div>
+  <aside class="rail" :class="{ 'rail--expanded': expanded }" aria-label="应用菜单">
+    <div class="rail__brand" title="ai2tiku · OCS 智能题库" aria-label="ai2tiku · 无限墨环">
+      <span class="rail__brand-mark"><AppLogo /></span>
+      <span v-if="expanded" class="rail__brand-copy"><strong>ai2tiku</strong><small>AI 题库</small></span>
+    </div>
+    <button class="rail__toggle" type="button" :aria-expanded="expanded" aria-controls="sidebar-navigation"
+      :aria-label="expanded ? '收起菜单' : '展开菜单'" :title="expanded ? '收起菜单' : '展开菜单'" @click="toggle">
+      <span class="rail__glyph">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <rect x="3" y="4" width="18" height="16" rx="2" />
+          <path d="M9 4v16" />
+          <path :d="expanded ? 'm16 9-3 3 3 3' : 'm13 9 3 3-3 3'" />
+        </svg>
+      </span>
+      <span v-if="expanded" class="rail__label">收起菜单</span>
+    </button>
 
-    <nav class="rail__nav" aria-label="主导航" @keydown="moveFocus" @keydown.esc="dismissed = true">
+    <nav id="sidebar-navigation" class="rail__nav" aria-label="主导航" @keydown="moveFocus" @keydown.esc="dismissed = true">
       <RouterLink
         v-for="item in navItems"
         :key="item.name"
@@ -78,18 +103,11 @@ function moveFocus(event: KeyboardEvent) {
             @blur="focused = ''"
             @click="navigate"
           >
-            <!-- 火箭与喷口共用坐标系，升空时粒子始终从尾部发出。 -->
-            <span v-if="item.name === 'deploy'" class="rail__rocket" aria-hidden="true">
-              <AppIcon :name="item.icon" :size="18" />
-              <span class="rail__thrust">
-                <i
-                  v-for="(dx, i) in [-3, -1.5, -0.5, 0.5, 1.5, 3]"
-                  :key="i"
-                  :style="{ '--dx': `${dx}px`, '--d': `${-i * 137}ms` }"
-                />
-              </span>
+            <span class="rail__glyph" aria-hidden="true">
+              <RocketMark v-if="item.name === 'deploy'" />
+              <AppIcon v-else :name="item.icon" :size="20" />
             </span>
-            <AppIcon v-else :name="item.icon" :size="18" />
+            <span v-if="expanded" class="rail__label">{{ item.title }}</span>
           </a>
 
           <div :id="`nav-tip-${item.name}`" class="rail__flyout" role="tooltip" :aria-hidden="!isOpen(item.name)">

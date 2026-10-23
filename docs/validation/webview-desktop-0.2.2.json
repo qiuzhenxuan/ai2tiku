@@ -1,0 +1,12 @@
+{
+  "passed": true,
+  "actualTauriRelease": true,
+  "contextMenuPrevented": true,
+  "editingShortcuts": true,
+  "sidebarToggle": true,
+  "particles": 72,
+  "frameSamples": 480,
+  "medianFrameMs": 4.199999999999818,
+  "p95FrameMs": 4.300000000000182,
+  "scope": "Actual Windows Tauri/WebView2 Release, isolated --data-dir, no paid calls and no test IPC mocks"
+}

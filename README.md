@@ -2,7 +2,7 @@
 
 把大模型接入 **OCS 网课助手** 的本地 AI 题库。
 
-ai2tiku 是一个基于 **Rust + egui/eframe** 的原生桌面应用，界面直接绘制为桌面窗口，默认构建不依赖 WebView、HTML、CSS、Node 或 pnpm。它在你本机跑起一个题库接口，
+ai2tiku 是一个基于 **Vue + Tauri / WebView2** 的桌面应用，使用 Rust 提供本地服务与 SQLite 题库。它在你本机跑起一个题库接口，
 OCS 脚本通过标准的「题库配置」调用它。**先用本地题库匹配，未命中再交给 AI 作答**，
 开启自动缓存后，通过格式校验的纯文本题答案会写入题库；题干精确匹配、题型与完整选项一致时，
 可复用本地答案、不再消耗 Token。图片题不使用文本缓存。
@@ -12,10 +12,7 @@ OCS 脚本通过标准的「题库配置」调用它。**先用本地题库匹�
 
 ## 更新记录
 
-2026-10-22（v0.2.1，Windows 双版本）：部署流程改为复制完整 JSON，补齐 Edge 用户脚本权限引导，
-修复部署状态误判、反向题干缓存误命中及端口切换失败影响旧服务的问题，并修正火箭图标与粒子方向。
-新增无限墨环 Logo 与桌面图标，默认黑白配色，背景采用淡墨山形与纸张纹理。
-界面重写为 Rust 原生窗口：完整文字侧栏、统一页头、卡片、表格和表单；无限标志更换为带飞白与不规则笔触的毛笔图像。原数据库位置与答题规则保持兼容。
+2026-10-23（v0.2.2，WebView 主版本）：默认使用 Vue + Tauri 界面，关闭浏览器右键菜单，并将 0.2.1 的折叠侧栏、连续火箭尾焰和控件反馈同步到 WebView。菜单默认仅显示图标，点击顶部按钮展开；常规按钮和单行字段统一 34px 高度，支持键盘聚焦和减少动态效果。保留黑白水墨视觉、毛笔无限标志和已有业务修复，继续读取原数据库。
 详细变化、升级说明与验证结果见 [更新日志](CHANGELOG.md)。
 
 ## 功能
@@ -31,14 +28,14 @@ OCS 脚本通过标准的「题库配置」调用它。**先用本地题库匹�
 - **答案格式校验** —— 按题型检查答案格式、选项范围和回复完整性，失败结果不作为有效答案缓存
 - **答题记录** —— 查看已记录请求的来源、模型、耗时与 Token；部分失败路径尚未留痕
 - **统计看板** —— 缓存命中率、Token 消耗趋势、按模型用量分布
-- **水墨视觉** —— 毛笔无限标志统一桌面图标与应用 Logo；黑白日夜配色，原生淡墨山形与纸张纤维背景
+- **水墨视觉** —— 毛笔无限标志统一桌面图标与应用 Logo；黑白日夜配色，淡墨山形与纸张纤维背景
 - **侧栏交互** —— 默认图标栏，点击展开文字菜单；独立动效与连续喷流的竖直火箭，支持键盘聚焦和减少动态效果
 - **控件反馈** —— 黑白悬停、按下与焦点状态，可点击控件显示手型；统一按钮和单行表单尺寸
 - **默认强制直连** —— 不受本机代理软件的系统代理影响；需要访问 OpenAI 等被墙服务时可在「设置」里单独填代理
 
 ## 截图
 
-Rust 原生窗口的黑白水墨主题（演示数据）：
+WebView 主版本的黑白水墨主题（演示数据）：
 
 | 概览 | OCS 题库配置 |
 | --- | --- |
@@ -48,51 +45,50 @@ Rust 原生窗口的黑白水墨主题（演示数据）：
 | --- | --- |
 | ![本地题库](docs/screenshots/questions.png) | ![夜间概览](docs/screenshots/dashboard-dark.png) |
 
-侧栏默认显示图标，点击顶部展开按钮可查看文字菜单：[展开效果](docs/screenshots/questions-expanded.png)。本地 0.2.1 Release 的 38 项 Rust 测试、71 张原生截图与动画帧间隔见 [原生验证记录](docs/native-validation-0.2.1.md)。
+侧栏默认显示图标，点击顶部展开按钮可查看文字菜单：[展开效果](docs/screenshots/questions-expanded.png)。验证范围见 [WebView 验证记录](docs/webview-validation-0.2.2.md)。
 
 ## 技术栈
 
 | 层 | 选型 |
 | --- | --- |
-| 桌面界面 | Rust + egui/eframe，Glow 原生渲染 |
+| 桌面界面 | Vue 3 + TypeScript + Tauri 2，Windows WebView2 |
 | 本地服务 | Rust + axum + Tokio |
 | 存储 | rusqlite / SQLite，复用原应用数据库 |
-| 视觉 | Rust 绘制的黑白日夜主题、图标动效与水墨背景；毛笔 Logo 使用 PNG 纹理 |
-| 兼容入口 | 旧 Vue + Tauri 界面保留为可选 `webview` feature，默认不编译 |
+| 视觉 | CSS 图标与粒子动效、黑白日夜主题和水墨背景；毛笔 Logo 使用 PNG |
+| 历史实现 | Rust 原生界面源码保留为可选 `native` feature，默认不编译 |
 
 ## 下载
 
-去 [v0.2.1 Release](https://github.com/qiuzhenxuan/ai2tiku/releases/tag/v0.2.1) 选择其中一个 Windows x64 版本：
+去 [v0.2.2 Release](https://github.com/qiuzhenxuan/ai2tiku/releases/tag/v0.2.2) 下载 Windows x64 主版本：
 
 | 文件 | 界面与运行要求 |
 | --- | --- |
-| [ai2tiku-native-windows-x64.exe](https://github.com/qiuzhenxuan/ai2tiku/releases/download/v0.2.1/ai2tiku-native-windows-x64.exe) | Rust 原生界面，默认折叠菜单、连续火箭尾焰，不需要 WebView2 |
-| [ai2tiku-webview-windows-x64.exe](https://github.com/qiuzhenxuan/ai2tiku/releases/download/v0.2.1/ai2tiku-webview-windows-x64.exe) | 保留 Vue + Tauri 界面，需要 WebView2 Runtime |
+| [ai2tiku-webview-windows-x64.exe](https://github.com/qiuzhenxuan/ai2tiku/releases/download/v0.2.2/ai2tiku-webview-windows-x64.exe) | Vue + Tauri 界面，包含本轮交互修复，需要 WebView2 Runtime |
 
-两版共用业务模块和原数据库。新增折叠菜单、密集尾焰与控件反馈在原生版中提供；WebView 版保留之前的界面。升级前先退出正在运行的版本，同一端口不要同时运行两版。Release 同时提供每个 EXE 的 `.sha256` 和汇总 `SHA256SUMS.txt`。
+升级前先退出正在运行的旧版。Release 同时提供 EXE 的 `.sha256` 和汇总 `SHA256SUMS.txt`。历史 v0.2.1 双版本仍在旧 Release 中保留。
 
-- 原生版面向 Windows 10/11，不需要 WebView2 运行时
+- 主版本面向 Windows 10/11，需要 WebView2 Runtime
 - exe 未做代码签名，首次运行 Windows 可能提示"未知发布者"，点"仍要运行"即可
 - 每次运行会自动在 `%APPDATA%\com.ai2tiku.app` 下建库，你的 API Key 只存在本机
 
 ## 运行
 
-前置要求：Rust stable 与 MSVC 生成工具。默认原生构建不需要安装前端依赖。
-
-```bash
-cargo run --manifest-path src-tauri/Cargo.toml
-cargo test --manifest-path src-tauri/Cargo.toml --locked --lib
-cargo build --manifest-path src-tauri/Cargo.toml --release --locked
-```
-
-Windows 单文件程序位于 `src-tauri/target/release/ai2tiku.exe`。
-
-如需对照旧 WebView 版本，显式选择兼容入口（需要 Node 与 pnpm）：
+前置要求：Node、pnpm、Rust stable、MSVC 生成工具及 WebView2 Runtime。
 
 ```bash
 pnpm install
 pnpm build
-cargo run --manifest-path src-tauri/Cargo.toml --no-default-features --features webview
+cargo run --manifest-path src-tauri/Cargo.toml --features custom-protocol
+cargo test --manifest-path src-tauri/Cargo.toml --locked --lib
+cargo build --manifest-path src-tauri/Cargo.toml --release --locked --features custom-protocol
+```
+
+Windows 单文件程序位于 `src-tauri/target/release/ai2tiku.exe`。
+
+Rust 原生试验界面源码仍保留，如需对照可显式启用：
+
+```bash
+cargo run --manifest-path src-tauri/Cargo.toml --no-default-features --features native
 ```
 
 ## 接入 OCS

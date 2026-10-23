@@ -1,4 +1,4 @@
-name: 编译并发布 Windows 双版本
+name: 编译并发布 Windows WebView 版
 
 on:
   push:
@@ -20,10 +20,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - edition: native
-            cargo_args: ""
           - edition: webview
-            cargo_args: "--no-default-features --features webview"
+            cargo_args: "--features custom-protocol"
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
@@ -80,7 +78,7 @@ jobs:
           if-no-files-found: error
 
   publish:
-    name: 发布两个版本
+    name: 发布 WebView 版
     needs: build
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
@@ -100,7 +98,7 @@ jobs:
           sha256sum --check SHA256SUMS.txt
       - uses: softprops/action-gh-release@v2
         with:
-          name: ${{ github.ref_name }} · Rust 原生版 / WebView 版
+          name: ${{ github.ref_name }} · WebView 版
           body_path: docs/releases/${{ github.ref_name }}.md
           fail_on_unmatched_files: true
           files: |

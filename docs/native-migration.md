@@ -1,6 +1,8 @@
 # Rust 原生界面迁移
 
-默认入口为 egui/eframe 桌面窗口。原有 `db`、`answers`、`ai`、`search`、`server` 模块直接复用；界面不通过 JavaScript IPC 调用业务。Tauri 与插件依赖改为可选，仅在显式启用 `webview` 时编译。
+> 本页记录 0.2.0 / 0.2.1 的试验实现。自 0.2.2 起默认界面恢复为 WebView；原生源码保留为可选功能，使用下方命令显式启用。
+
+启用 `native` 后，入口为 egui/eframe 桌面窗口。原有 `db`、`answers`、`ai`、`search`、`server` 模块直接复用；界面不通过 JavaScript IPC 调用业务。默认启用的 `webview` 对应当前主版本。
 
 | 页面 | 原生功能 |
 | --- | --- |
@@ -22,8 +24,8 @@ Windows 继续使用 `%APPDATA%/com.ai2tiku.app/ai2tiku.db`，不另建空库或
 侧栏每次启动默认折叠为 72px 图标栏，点击顶部按钮展开为 200px 文字栏；切换按钮也可用键盘激活。Logo 和图标的位置保持稳定。侧栏可用 Tab 聚焦，上下方向键在八项中循环，Home / End 跳至首尾，Enter / Space 进入页面。聚焦会显示页面说明，Escape 收起说明并保留当前焦点；移开或切换焦点后可以再次展开。图标内部错峰展开，按下时轻微收缩；减少动态效果时保留静态高亮。
 
 ```powershell
-cargo test --manifest-path src-tauri/Cargo.toml --locked --lib
-cargo build --manifest-path src-tauri/Cargo.toml --release --locked
+cargo test --manifest-path src-tauri/Cargo.toml --locked --lib --no-default-features --features native
+cargo build --manifest-path src-tauri/Cargo.toml --release --locked --no-default-features --features native
 ```
 
 可用 `--data-dir ./local-test-data` 指定独立数据目录。原生帧缓冲冒烟验证：

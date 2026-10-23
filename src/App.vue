@@ -13,7 +13,12 @@ const title = computed(() => (route.meta.title as string) ?? "ai2tiku");
 const desc = computed(() => (route.meta.desc as string) ?? "");
 
 const status = ref<ServerStatus | null>(null);
+const sidebarExpanded = ref(false);
 let timer: number | undefined;
+
+function preventBrowserMenu(event: Event) {
+  event.preventDefault();
+}
 
 async function refreshStatus() {
   try {
@@ -24,19 +29,22 @@ async function refreshStatus() {
 }
 
 onMounted(() => {
+  // Capture also covers modal content teleported outside the app-shell.
+  document.addEventListener("contextmenu", preventBrowserMenu, true);
   refreshStatus();
   timer = window.setInterval(refreshStatus, 5000);
 });
 
 onUnmounted(() => {
+  document.removeEventListener("contextmenu", preventBrowserMenu, true);
   if (timer) window.clearInterval(timer);
 });
 </script>
 
 <template>
-  <div class="app-shell">
+  <div class="app-shell" :class="{ 'is-rail-expanded': sidebarExpanded }">
     <TitleBar />
-    <AppSidebar />
+    <AppSidebar :expanded="sidebarExpanded" @toggle="sidebarExpanded = !sidebarExpanded" />
 
     <div class="main">
       <header class="topbar">

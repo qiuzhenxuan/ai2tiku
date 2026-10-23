@@ -1,7 +1,7 @@
 {
   "name": "ai2tiku",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.2",
   "type": "module",
   "description": "AI 驱动的 OCS 题库服务：把大模型接入 OCS 网课助手",
   "scripts": {

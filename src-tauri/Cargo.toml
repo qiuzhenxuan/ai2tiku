@@ -1,6 +1,6 @@
 [package]
 name = "ai2tiku"
-version = "0.2.1"
+version = "0.2.2"
 description = "AI 驱动的 OCS 题库服务：把大模型接入 OCS 网课助手"
 authors = ["ai2tiku"]
 edition = "2021"
@@ -11,9 +11,10 @@ name = "ai2tiku_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [features]
-default = ["native"]
+default = ["webview"]
 native = ["dep:eframe", "dep:image", "dep:dirs", "dep:arboard"]
 webview = ["dep:tauri", "dep:tauri-plugin-opener", "dep:tauri-plugin-clipboard-manager", "dep:tauri-build"]
+custom-protocol = ["tauri?/custom-protocol"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [], optional = true }

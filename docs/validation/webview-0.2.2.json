@@ -1,0 +1,2073 @@
+{
+  "passed": true,
+  "screenshots": 65,
+  "pages": 8,
+  "themes": 2,
+  "sidebarStates": 2,
+  "sizes": [
+    1160,
+    900
+  ],
+  "contextMenuPrevented": true,
+  "editingShortcuts": true,
+  "controlsHeight": 34,
+  "particleCount": 72,
+  "reducedMotion": true,
+  "cadence": {
+    "frames": 479,
+    "medianMs": 4.19999999999709,
+    "p95Ms": 4.299999999999272
+  },
+  "errors": [],
+  "scope": "Production WebView frontend in Edge; isolated mocked IPC; no paid model calls",
+  "measurements": [
+    {
+      "name": "dashboard-light-collapsed-1160",
+      "rail": 72,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--ghost btn--sm",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "deploy-light-collapsed-1160",
+      "rail": 72,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--primary btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--ghost",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--ghost",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "ocs-light-collapsed-1160",
+      "rail": 72,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "select",
+          "height": 34
+        },
+        {
+          "tag": "input",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "providers-light-collapsed-1160",
+      "rail": 72,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--primary btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary btn--sm",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "questions-light-collapsed-1160",
+      "rail": 72,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "input",
+          "height": 34
+        },
+        {
+          "tag": "select",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--ghost btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--ghost btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--danger btn--sm",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "records-light-collapsed-1160",
+      "rail": 72,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--danger btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "stats-light-collapsed-1160",
+      "rail": 72,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--ghost btn--sm",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "settings-light-collapsed-1160",
+      "rail": 72,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "input",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "input",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "dashboard-light-expanded-1160",
+      "rail": 200,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--ghost btn--sm",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "deploy-light-expanded-1160",
+      "rail": 200,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--primary btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--ghost",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--ghost",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "ocs-light-expanded-1160",
+      "rail": 200,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "select",
+          "height": 34
+        },
+        {
+          "tag": "input",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "providers-light-expanded-1160",
+      "rail": 200,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--primary btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary btn--sm",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "questions-light-expanded-1160",
+      "rail": 200,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "input",
+          "height": 34
+        },
+        {
+          "tag": "select",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--ghost btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--ghost btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--danger btn--sm",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "records-light-expanded-1160",
+      "rail": 200,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--danger btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "stats-light-expanded-1160",
+      "rail": 200,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--ghost btn--sm",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "settings-light-expanded-1160",
+      "rail": 200,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "input",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "input",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "dashboard-dark-collapsed-1160",
+      "rail": 72,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--ghost btn--sm",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "deploy-dark-collapsed-1160",
+      "rail": 72,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--primary btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--ghost",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--ghost",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "ocs-dark-collapsed-1160",
+      "rail": 72,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "select",
+          "height": 34
+        },
+        {
+          "tag": "input",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "providers-dark-collapsed-1160",
+      "rail": 72,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--primary btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary btn--sm",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "questions-dark-collapsed-1160",
+      "rail": 72,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "input",
+          "height": 34
+        },
+        {
+          "tag": "select",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--ghost btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--ghost btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--danger btn--sm",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "records-dark-collapsed-1160",
+      "rail": 72,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--danger btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "stats-dark-collapsed-1160",
+      "rail": 72,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--ghost btn--sm",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "settings-dark-collapsed-1160",
+      "rail": 72,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "input",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "input",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "dashboard-dark-expanded-1160",
+      "rail": 200,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--ghost btn--sm",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "deploy-dark-expanded-1160",
+      "rail": 200,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--primary btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--ghost",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--ghost",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "ocs-dark-expanded-1160",
+      "rail": 200,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "select",
+          "height": 34
+        },
+        {
+          "tag": "input",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "providers-dark-expanded-1160",
+      "rail": 200,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--primary btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary btn--sm",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "questions-dark-expanded-1160",
+      "rail": 200,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "input",
+          "height": 34
+        },
+        {
+          "tag": "select",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--ghost btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--ghost btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--danger btn--sm",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "records-dark-expanded-1160",
+      "rail": 200,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--danger btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "stats-dark-expanded-1160",
+      "rail": 200,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--ghost btn--sm",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "settings-dark-expanded-1160",
+      "rail": 200,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "input",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "input",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "dashboard-light-collapsed-900",
+      "rail": 72,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--ghost btn--sm",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "deploy-light-collapsed-900",
+      "rail": 72,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--primary btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--ghost",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--ghost",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "ocs-light-collapsed-900",
+      "rail": 72,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "select",
+          "height": 34
+        },
+        {
+          "tag": "input",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "providers-light-collapsed-900",
+      "rail": 72,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--primary btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary btn--sm",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "questions-light-collapsed-900",
+      "rail": 72,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "input",
+          "height": 34
+        },
+        {
+          "tag": "select",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--ghost btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--ghost btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--danger btn--sm",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "records-light-collapsed-900",
+      "rail": 72,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--danger btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "stats-light-collapsed-900",
+      "rail": 72,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--ghost btn--sm",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "settings-light-collapsed-900",
+      "rail": 72,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "input",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "input",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "dashboard-light-expanded-900",
+      "rail": 200,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--ghost btn--sm",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "deploy-light-expanded-900",
+      "rail": 200,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--primary btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--ghost",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--ghost",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "ocs-light-expanded-900",
+      "rail": 200,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "select",
+          "height": 34
+        },
+        {
+          "tag": "input",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "providers-light-expanded-900",
+      "rail": 200,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--primary btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary btn--sm",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "questions-light-expanded-900",
+      "rail": 200,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "input",
+          "height": 34
+        },
+        {
+          "tag": "select",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--ghost btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--ghost btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--danger btn--sm",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "records-light-expanded-900",
+      "rail": 200,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--danger btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "stats-light-expanded-900",
+      "rail": 200,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--ghost btn--sm",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "settings-light-expanded-900",
+      "rail": 200,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "input",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "input",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "dashboard-dark-collapsed-900",
+      "rail": 72,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--ghost btn--sm",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "deploy-dark-collapsed-900",
+      "rail": 72,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--primary btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--ghost",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--ghost",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "ocs-dark-collapsed-900",
+      "rail": 72,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "select",
+          "height": 34
+        },
+        {
+          "tag": "input",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "providers-dark-collapsed-900",
+      "rail": 72,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--primary btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary btn--sm",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "questions-dark-collapsed-900",
+      "rail": 72,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "input",
+          "height": 34
+        },
+        {
+          "tag": "select",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--ghost btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--ghost btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--danger btn--sm",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "records-dark-collapsed-900",
+      "rail": 72,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--danger btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "stats-dark-collapsed-900",
+      "rail": 72,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--ghost btn--sm",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "settings-dark-collapsed-900",
+      "rail": 72,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "input",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "input",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "dashboard-dark-expanded-900",
+      "rail": 200,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--ghost btn--sm",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "deploy-dark-expanded-900",
+      "rail": 200,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--primary btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--ghost",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--ghost",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "ocs-dark-expanded-900",
+      "rail": 200,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "select",
+          "height": 34
+        },
+        {
+          "tag": "input",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "providers-dark-expanded-900",
+      "rail": 200,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--primary btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary btn--sm",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "questions-dark-expanded-900",
+      "rail": 200,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "input",
+          "height": 34
+        },
+        {
+          "tag": "select",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--ghost btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--ghost btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--danger btn--sm",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "records-dark-expanded-900",
+      "rail": 200,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--danger btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--sm",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "stats-dark-expanded-900",
+      "rail": 200,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "btn btn--ghost btn--sm",
+          "height": 34
+        }
+      ]
+    },
+    {
+      "name": "settings-dark-expanded-900",
+      "rail": 200,
+      "overflow": false,
+      "contentOverflow": false,
+      "navInside": true,
+      "controls": [
+        {
+          "tag": "input",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        },
+        {
+          "tag": "input",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn btn--primary",
+          "height": 34
+        },
+        {
+          "tag": "btn",
+          "height": 34
+        }
+      ]
+    }
+  ]
+}

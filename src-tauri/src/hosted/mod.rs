@@ -194,6 +194,7 @@ struct AuthWindow {
 }
 #[derive(Default)]
 struct SourceWindow {
+    last_seen: i64,
     count: u32,
     emails: HashMap<String, u32>,
 }
@@ -317,9 +318,18 @@ impl App {
             };
         }
         if !window.sources.contains_key(&source) && window.sources.len() >= 4096 {
-            return Err(ApiError::limited("当前来源请求过多，请稍后再试"));
+            // A bounded cache must not become a global login deny switch.
+            if let Some(oldest) = window
+                .sources
+                .iter()
+                .min_by_key(|(_, bucket)| bucket.last_seen)
+                .map(|(ip, _)| *ip)
+            {
+                window.sources.remove(&oldest);
+            }
         }
         let bucket = window.sources.entry(source).or_default();
+        bucket.last_seen = store::epoch();
         if bucket.count >= 30 || bucket.emails.get(email).copied().unwrap_or(0) >= 5 {
             return Err(ApiError::limited(
                 "当前来源登录或注册请求过于频繁，请一分钟后再试",

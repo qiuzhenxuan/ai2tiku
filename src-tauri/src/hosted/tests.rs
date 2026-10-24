@@ -7,6 +7,42 @@ use tower::ServiceExt;
 
 struct TestDirectory(PathBuf);
 
+#[test]
+fn newly_created_account_snapshot_cannot_adopt_a_subsequent_password_reset() {
+    let f = Fixture::new();
+    let created = f
+        .app
+        .store
+        .create_user(
+            Some(1),
+            "new-user@example.com",
+            "creation-test-password",
+            100,
+        )
+        .unwrap();
+    f.app
+        .store
+        .update_user(1, created.id, None, None, Some("later-reset-password"))
+        .unwrap();
+    assert!(f
+        .app
+        .store
+        .new_session(created.id, created.auth_version)
+        .is_err());
+    let fresh = f.app.store.user(created.id).unwrap();
+    assert_ne!(fresh.auth_version, created.auth_version);
+}
+
+#[test]
+fn full_source_cache_evicts_a_bucket_instead_of_blocking_new_sources() {
+    let f = Fixture::new();
+    for index in 0..4097_u32 {
+        let source = IpAddr::V4(std::net::Ipv4Addr::from(0xc0000000_u32 + index));
+        f.app.throttle(source, "test@example.com").unwrap();
+    }
+    assert_eq!(f.app.auth_window.lock().unwrap().sources.len(), 4096);
+}
+
 #[tokio::test]
 async fn session_creation_atomically_rejects_credentials_verified_before_reset_or_disable() {
     let f = Fixture::new();

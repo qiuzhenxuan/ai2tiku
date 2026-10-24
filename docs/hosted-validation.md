@@ -5,7 +5,7 @@
 ## 已通过
 
 - Rust 服务可在不启用桌面功能的情况下独立编译。
-- `cargo test --manifest-path src-tauri/Cargo.toml --no-default-features --features hosted --locked --offline --lib`：72 个测试通过，覆盖权限、会话凭据版本、来源隔离限流、供应商地址绑定、异常记录及图片数组边界。
+- `cargo test --manifest-path src-tauri/Cargo.toml --no-default-features --features hosted --locked --offline --lib`：74 个测试通过，覆盖权限、登录与注册会话凭据版本、来源隔离限流及容量淘汰、供应商地址绑定、异常记录及图片数组边界。
 - 网页端 Vue/TypeScript 类型检查与 Vite 生产构建。
 - `scripts/check-hosted.cjs` 使用真实 Rust 服务及生产前端，在隔离临时目录运行；仅第三方模型元数据端点由浏览器固定数据替代，模型列表 HTTP 读取另由 Rust 本地模拟供应商覆盖：
   - 管理员和用户登录、普通用户访问后台被拒绝、关闭注册时无法自行注册。

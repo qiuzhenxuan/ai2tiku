@@ -152,9 +152,11 @@ impl Store {
             "INSERT INTO audit(actor_id,action,target_id) VALUES(?1,'user.create',?2)",
             params![actor, id],
         )?;
+        // Keep the creation-time credential version. Reading it after commit
+        // could adopt a concurrent reset's version without verifying its password.
+        let created = tx.query_row(&format!("{USERS} WHERE u.id=?1"), [id], user)?;
         tx.commit()?;
-        drop(conn);
-        self.user(id)
+        Ok(created)
     }
     pub fn session(&self, secret: &str) -> Result<User> {
         let id = self

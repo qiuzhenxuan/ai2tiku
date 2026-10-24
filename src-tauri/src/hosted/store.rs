@@ -274,8 +274,10 @@ impl Store {
             "INSERT INTO quota(user_id,day,count) VALUES(?1,?2,0) ON CONFLICT DO NOTHING",
             params![id, current_day],
         )?;
+        // Zero removes the daily cap while keeping usage, authentication and
+        // account-state checks in the same atomic transaction.
         let count = tx.execute(
-            "UPDATE quota SET count=count+1 WHERE user_id=?1 AND day=?2 AND count<?3",
+            "UPDATE quota SET count=count+1 WHERE user_id=?1 AND day=?2 AND (?3=0 OR count<?3)",
             params![id, current_day, limit],
         )?;
         if count == 0 {

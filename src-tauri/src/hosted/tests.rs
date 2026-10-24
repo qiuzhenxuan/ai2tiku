@@ -6,6 +6,276 @@ use axum::{
 use tower::ServiceExt;
 
 struct TestDirectory(PathBuf);
+
+struct ModelMetadataServer(tokio::task::JoinHandle<()>, String);
+impl Drop for ModelMetadataServer {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
+}
+async fn metadata_server(
+    status: StatusCode,
+    body: String,
+    expected_key: &'static str,
+) -> ModelMetadataServer {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base = format!("http://{}/v1", listener.local_addr().unwrap());
+    let server = Router::new().route(
+        "/v1/models",
+        get(move |headers: HeaderMap| {
+            let body = body.clone();
+            async move {
+                assert_eq!(headers["authorization"], format!("Bearer {expected_key}"));
+                (status, body)
+            }
+        }),
+    );
+    ModelMetadataServer(
+        tokio::spawn(async move {
+            axum::serve(listener, server).await.unwrap();
+        }),
+        base,
+    )
+}
+
+#[tokio::test]
+async fn discovery_uses_draft_or_same_provider_saved_key_without_changing_settings_or_quota() {
+    let server = metadata_server(
+        StatusCode::OK,
+        json!({"data":[{"id":"reasoner"},{"id":"chat"},{"id":"chat"}]}).to_string(),
+        "sk-not-a-real-key",
+    )
+    .await;
+    let f = Fixture::with_provider_base(&server.1);
+    let (status, data) = f
+        .request(
+            "POST",
+            "/api/console/models/discover",
+            Some(&f.user),
+            json!({"providerId":"deepseek","apiKey":"sk-not-a-real-key"}),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(data["models"], json!(["chat", "reasoner"]));
+    assert!(
+        f.app.store.model(f.user_id).unwrap().is_none(),
+        "Draft Key must not be saved"
+    );
+    let _token = f.token().await;
+    let previous = f.app.store.model(f.user_id).unwrap().unwrap();
+    let (status, data) = f
+        .request(
+            "POST",
+            "/api/console/models/discover",
+            Some(&f.user),
+            json!({"providerId":"deepseek"}),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(data["models"], json!(["chat", "reasoner"]));
+    assert_eq!(
+        f.app.store.model(f.user_id).unwrap().unwrap().encrypted_key,
+        previous.encrypted_key
+    );
+    assert_eq!(f.app.store.user(f.user_id).unwrap().used_today, 0);
+}
+
+#[tokio::test]
+async fn discovery_rejects_missing_sessions_unapproved_providers_and_invalid_keys() {
+    let f = Fixture::new();
+    for (session, data, expected) in [
+        (
+            None,
+            json!({"providerId":"deepseek","apiKey":"draft-key"}),
+            StatusCode::UNAUTHORIZED,
+        ),
+        (
+            Some(f.user.as_str()),
+            json!({"providerId":"http://127.0.0.1","apiKey":"draft-key"}),
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            Some(f.user.as_str()),
+            json!({"providerId":"deepseek"}),
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            Some(f.user.as_str()),
+            json!({"providerId":"deepseek","apiKey":"bad\nkey"}),
+            StatusCode::BAD_REQUEST,
+        ),
+    ] {
+        assert_eq!(
+            f.request("POST", "/api/console/models/discover", session, data)
+                .await
+                .0,
+            expected
+        );
+    }
+}
+
+#[tokio::test]
+async fn discovery_never_echoes_upstream_errors_and_enforces_response_limit() {
+    for (status, body) in [
+        (StatusCode::UNAUTHORIZED, "sk-not-a-real-key".into()),
+        (StatusCode::METHOD_NOT_ALLOWED, "sk-not-a-real-key".into()),
+        (StatusCode::OK, "x".repeat(2 * 1024 * 1024 + 1)),
+        (
+            StatusCode::OK,
+            json!({"data":[{"id":"sk-not-a-real-key"}]}).to_string(),
+        ),
+    ] {
+        let server = metadata_server(status, body, "sk-not-a-real-key").await;
+        let f = Fixture::with_provider_base(&server.1);
+        let (status, data) = f
+            .request(
+                "POST",
+                "/api/console/models/discover",
+                Some(&f.user),
+                json!({"providerId":"deepseek","apiKey":"sk-not-a-real-key"}),
+            )
+            .await;
+        assert!(!status.is_success());
+        assert!(!data.to_string().contains("sk-not-a-real-key"));
+        assert!(f.app.store.model(f.user_id).unwrap().is_none());
+    }
+}
+
+#[tokio::test]
+async fn ocs_head_and_get_probes_are_public_read_only_and_do_not_reserve_quota() {
+    let f = Fixture::new();
+    let token = f.token().await;
+    for method in ["HEAD", "GET"] {
+        for bearer in [None, Some(token.as_str()), Some("invalid-token")] {
+            let mut request = Request::builder()
+                .method(method)
+                .uri("/api/search?t=1792771022940&title=must-not-answer");
+            if let Some(bearer) = bearer {
+                request = request.header("authorization", format!("Bearer {bearer}"));
+            }
+            let response = router(f.app.clone())
+                .oneshot(request.body(Body::empty()).unwrap())
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            assert_eq!(response.headers()["cache-control"], "no-store");
+            let body = to_bytes(response.into_body(), 4096).await.unwrap();
+            if method == "HEAD" {
+                assert!(body.is_empty());
+            } else {
+                let data: Value = serde_json::from_slice(&body).unwrap();
+                assert_eq!(data["code"], 0);
+                assert!(data["answer"].is_null());
+                assert!(data["msg"].as_str().unwrap().contains("POST"));
+            }
+        }
+    }
+    assert_eq!(f.app.store.user(f.user_id).unwrap().used_today, 0);
+    assert!(f.app.tenants.lock().unwrap().is_empty());
+    let (status, _) = f
+        .request("POST", "/api/search", None, json!({"title":""}))
+        .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn unlimited_quota_accepts_requests_beyond_finite_caps_and_keeps_usage() {
+    let f = Fixture::new();
+    let token = f.token().await;
+    let (status, user) = f
+        .request(
+            "PATCH",
+            &format!("/api/console/admin/users/{}", f.user_id),
+            Some(&f.admin),
+            json!({"dailyLimit":0}),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(user["dailyLimit"], 0);
+    f.app
+        .store
+        .lock()
+        .unwrap()
+        .execute(
+            "INSERT INTO quota(user_id,day,count) VALUES(?1,?2,1000001)",
+            rusqlite::params![f.user_id, store::day()],
+        )
+        .unwrap();
+    for _ in 0..3 {
+        f.app.store.reserve(f.user_id, &token).unwrap();
+    }
+    assert_eq!(f.app.store.user(f.user_id).unwrap().used_today, 1000004);
+    let (status, _) = f
+        .request(
+            "PATCH",
+            &format!("/api/console/admin/users/{}", f.user_id),
+            Some(&f.admin),
+            json!({"dailyLimit":-1}),
+        )
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(f.app.store.user(f.user_id).unwrap().daily_limit, 0);
+    f.app.store.revoke_token(1, f.user_id, None).unwrap();
+    assert_eq!(
+        f.app.store.reserve(f.user_id, &token).unwrap_err().0,
+        StatusCode::UNAUTHORIZED
+    );
+}
+
+#[tokio::test]
+async fn changing_unlimited_to_finite_preserves_used_quota_and_disabled_checks() {
+    let f = Fixture::new();
+    let token = f.token().await;
+    let path = format!("/api/console/admin/users/{}", f.user_id);
+    let (status, _) = f
+        .request("PATCH", &path, Some(&f.admin), json!({"dailyLimit":0}))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    for _ in 0..5 {
+        f.app.store.reserve(f.user_id, &token).unwrap();
+    }
+    let (status, _) = f
+        .request("PATCH", &path, Some(&f.admin), json!({"dailyLimit":2}))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        f.app.store.reserve(f.user_id, &token).unwrap_err().0,
+        StatusCode::TOO_MANY_REQUESTS
+    );
+    assert_eq!(f.app.store.user(f.user_id).unwrap().used_today, 5);
+    f.request("PATCH", &path, Some(&f.admin), json!({"dailyLimit":0}))
+        .await;
+    f.app.store.reserve(f.user_id, &token).unwrap();
+    assert_eq!(f.app.store.user(f.user_id).unwrap().used_today, 6);
+    f.request("PATCH", &path, Some(&f.admin), json!({"enabled":false}))
+        .await;
+    assert_eq!(
+        f.app.store.reserve(f.user_id, &token).unwrap_err().0,
+        StatusCode::FORBIDDEN
+    );
+}
+
+#[tokio::test]
+async fn only_admin_can_assign_or_create_unlimited_accounts() {
+    let f = Fixture::new();
+    let path = format!("/api/console/admin/users/{}", f.user_id);
+    let (status, _) = f
+        .request("PATCH", &path, Some(&f.user), json!({"dailyLimit":0}))
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(f.app.store.user(f.user_id).unwrap().daily_limit, 2);
+    let (status, user) = f
+        .request(
+            "POST",
+            "/api/console/admin/users",
+            Some(&f.admin),
+            json!({"email":"unlimited@example.com","password":"test-user-password","dailyLimit":0}),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(user["dailyLimit"], 0);
+    assert_eq!(user["role"], "user");
+}
 impl Drop for TestDirectory {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.0);
@@ -20,6 +290,9 @@ struct Fixture {
 }
 impl Fixture {
     fn new() -> Self {
+        Self::with_provider_base("https://api.deepseek.com/v1")
+    }
+    fn with_provider_base(base_url: &str) -> Self {
         let dir = std::env::temp_dir().join(format!("ai2tiku-hosted-tests-{}", crypto::random()));
         let app = App::open(Config {
             data_dir: dir.clone(),
@@ -32,7 +305,7 @@ impl Fixture {
             providers: vec![ProviderPreset {
                 id: "deepseek".into(),
                 name: "DeepSeek".into(),
-                base_url: "https://api.deepseek.com/v1".into(),
+                base_url: base_url.into(),
                 models: vec![],
             }],
         })

@@ -6,6 +6,9 @@ on:
     branches: [main]
     paths:
       - .github/workflows/hosted-images.yml
+      - src-tauri/**
+      - web/**
+      - deploy/**
 
 permissions:
   contents: read

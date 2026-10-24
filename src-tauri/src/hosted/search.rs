@@ -17,6 +17,17 @@ fn failure(message: &str) -> SearchOutcome {
         msg: Some(message.into()),
     }
 }
+/// OCS probes the configured search URL with unauthenticated HEAD (then GET).
+/// This only confirms transport availability; it never authenticates an account,
+/// reserves quota, opens a tenant database, or invokes a model. Axum strips the
+/// GET response body automatically when serving HEAD.
+pub(super) async fn probe() -> Json<serde_json::Value> {
+    Json(json!({
+        "code": 0,
+        "msg": "题库服务连接正常；搜题请使用 POST 并携带有效的题库访问令牌",
+        "answer": null
+    }))
+}
 fn validate(q: &SearchQuery) -> std::result::Result<(), &'static str> {
     if q.ask_title().trim().is_empty() {
         return Err("题目不能为空");

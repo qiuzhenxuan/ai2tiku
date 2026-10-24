@@ -1,5 +1,6 @@
 //! Opt-in hosted deployment. Desktop routes and plaintext provider storage are never exposed.
 mod crypto;
+mod discovery;
 mod search;
 mod store;
 #[cfg(test)]
@@ -304,6 +305,7 @@ pub fn router(app: Arc<App>) -> Router {
         .route("/api/console/auth/logout", post(logout))
         .route("/api/console/me", get(me))
         .route("/api/console/model", get(get_model).put(save_model))
+        .route("/api/console/models/discover", post(discovery::models))
         .route("/api/console/tokens", get(tokens).post(create_token))
         .route("/api/console/tokens/{id}", delete(revoke_token))
         .route("/api/console/questions", get(questions))
@@ -316,7 +318,7 @@ pub fn router(app: Arc<App>) -> Router {
             get(admin_tokens).delete(admin_revoke_tokens),
         )
         .route("/api/console/admin/audit", get(audit))
-        .route("/api/search", post(search::answer))
+        .route("/api/search", get(search::probe).post(search::answer))
         .fallback(|| async { ApiError::not_found() })
         .layer(DefaultBodyLimit::max(8 * 1024 * 1024))
         .layer(middleware::from_fn_with_state(app.clone(), security))
@@ -412,8 +414,8 @@ fn valid_password(value: &str) -> Result<()> {
     }
 }
 fn valid_limit(value: i64) -> Result<i64> {
-    if !(1..=1_000_000).contains(&value) {
-        Err(ApiError::bad("每日限额须为 1–1000000"))
+    if !(0..=1_000_000).contains(&value) {
+        Err(ApiError::bad("每日限额须为 0–1000000，0 表示无上限"))
     } else {
         Ok(value)
     }

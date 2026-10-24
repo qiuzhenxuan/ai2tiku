@@ -1,23 +1,25 @@
 //! Opt-in hosted deployment. Desktop routes and plaintext provider storage are never exposed.
 mod crypto;
 mod discovery;
+mod input;
 mod search;
 mod store;
 #[cfg(test)]
 mod tests;
 
 use axum::{
-    extract::{DefaultBodyLimit, Path, Query, Request, State},
+    extract::{ConnectInfo, DefaultBodyLimit, Path, Query, Request, State},
     http::{header, HeaderMap, HeaderValue, StatusCode},
     middleware::{self, Next},
     response::{IntoResponse, Response},
     routing::{delete, get, patch, post},
-    Json, Router,
+    Extension, Json, Router,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
     collections::HashMap,
+    net::{IpAddr, SocketAddr},
     path::PathBuf,
     sync::{Arc, Mutex},
     time::Duration,
@@ -80,6 +82,7 @@ pub struct Config {
     pub admin_email: String,
     pub admin_password: String,
     pub registration_open: bool,
+    pub trusted_source_header: Option<String>,
     pub providers: Vec<ProviderPreset>,
 }
 fn env_secret(name: &str) -> std::result::Result<String, String> {
@@ -103,6 +106,9 @@ fn provider_url(value: &str) -> std::result::Result<String, String> {
     }
     // Arbitrary destinations are never accepted from tenants. Extra bases are administrator-controlled.
     Ok(url.to_string().trim_end_matches('/').to_string())
+}
+fn custom_provider_id(base_url: &str) -> String {
+    format!("custom-{}", crypto::hash(base_url))
 }
 impl Config {
     pub fn from_env() -> std::result::Result<Self, String> {
@@ -141,10 +147,11 @@ impl Config {
                 .filter(|v| !v.trim().is_empty())
                 .enumerate()
             {
+                let base_url = provider_url(value.trim())?;
                 providers.push(ProviderPreset {
-                    id: format!("custom-{}", index + 1),
+                    id: custom_provider_id(&base_url),
                     name: format!("管理员服务 {}", index + 1),
-                    base_url: provider_url(value.trim())?,
+                    base_url,
                     models: vec![],
                 });
             }
@@ -154,6 +161,14 @@ impl Config {
                 .map_err(|e| e.1)?;
         let password = env_secret("ADMIN_PASSWORD")?;
         valid_password(&password).map_err(|e| e.1)?;
+        let trusted_source_header = match std::env::var("HOSTED_TRUSTED_SOURCE_HEADER")
+            .ok()
+            .filter(|v| !v.is_empty())
+        {
+            Some(value) if value == "x-real-ip" => Some(value),
+            Some(_) => return Err("HOSTED_TRUSTED_SOURCE_HEADER must be empty or x-real-ip".into()),
+            None => None,
+        };
         Ok(Self {
             data_dir: std::env::var_os("DATA_DIR")
                 .map(PathBuf::from)
@@ -164,6 +179,7 @@ impl Config {
             admin_email: email,
             admin_password: password,
             registration_open: std::env::var("REGISTRATION_OPEN").is_ok_and(|v| v == "true"),
+            trusted_source_header,
             providers,
         })
     }
@@ -174,9 +190,15 @@ struct Tenant {
 }
 struct AuthWindow {
     started: i64,
+    sources: HashMap<IpAddr, SourceWindow>,
+}
+#[derive(Default)]
+struct SourceWindow {
     count: u32,
     emails: HashMap<String, u32>,
 }
+#[derive(Clone, Copy)]
+struct AuthSource(IpAddr);
 pub struct App {
     config: Config,
     store: Store,
@@ -220,6 +242,7 @@ impl App {
         store
             .bootstrap(&config.admin_email, &config.admin_password)
             .map_err(|e| e.1)?;
+        store.bind_legacy_builtin_models().map_err(|e| e.1)?;
         config.admin_password.clear();
         let client = reqwest::Client::builder()
             .no_proxy()
@@ -238,8 +261,7 @@ impl App {
             password_slots: Arc::new(Semaphore::new(2)),
             auth_window: Mutex::new(AuthWindow {
                 started: store::epoch(),
-                count: 0,
-                emails: HashMap::new(),
+                sources: HashMap::new(),
             }),
             dummy_password,
         }))
@@ -279,20 +301,32 @@ impl App {
         self.store
             .session(session_cookie(self, headers).ok_or_else(ApiError::unauthorized)?)
     }
-    fn throttle(&self, email: &str) -> Result<()> {
+    fn bound_model(&self, id: i64) -> Result<Option<ModelConfig>> {
+        Ok(self.store.model(id)?.filter(|model| {
+            self.config.providers.iter().any(|provider| {
+                provider.id == model.provider_id && provider.base_url == model.provider_base_url
+            })
+        }))
+    }
+    fn throttle(&self, source: IpAddr, email: &str) -> Result<()> {
         let mut window = self.auth_window.lock().map_err(|_| ApiError::internal())?;
         if store::epoch() - window.started >= 60 {
             *window = AuthWindow {
                 started: store::epoch(),
-                count: 0,
-                emails: HashMap::new(),
+                sources: HashMap::new(),
             };
         }
-        if window.count >= 30 || window.emails.get(email).copied().unwrap_or(0) >= 5 {
-            return Err(ApiError::limited("登录或注册请求过于频繁，请一分钟后再试"));
+        if !window.sources.contains_key(&source) && window.sources.len() >= 4096 {
+            return Err(ApiError::limited("当前来源请求过多，请稍后再试"));
         }
-        window.count += 1;
-        *window.emails.entry(email.into()).or_default() += 1;
+        let bucket = window.sources.entry(source).or_default();
+        if bucket.count >= 30 || bucket.emails.get(email).copied().unwrap_or(0) >= 5 {
+            return Err(ApiError::limited(
+                "当前来源登录或注册请求过于频繁，请一分钟后再试",
+            ));
+        }
+        bucket.count += 1;
+        *bucket.emails.entry(email.into()).or_default() += 1;
         Ok(())
     }
 }
@@ -324,7 +358,26 @@ pub fn router(app: Arc<App>) -> Router {
         .layer(middleware::from_fn_with_state(app.clone(), security))
         .with_state(app)
 }
-async fn security(State(app): State<Arc<App>>, request: Request, next: Next) -> Response {
+fn auth_source(app: &App, request: &Request) -> IpAddr {
+    // Optional forwarding trust is operator-controlled and disabled by default.
+    // The public proxy must overwrite this header; never use arbitrary XFF.
+    if let Some(name) = &app.config.trusted_source_header {
+        let mut values = request.headers().get_all(name).iter();
+        if let Some(value) = values.next().filter(|_| values.next().is_none()) {
+            if let Some(ip) = value.to_str().ok().and_then(|v| v.parse::<IpAddr>().ok()) {
+                return ip;
+            }
+        }
+    }
+    request
+        .extensions()
+        .get::<ConnectInfo<SocketAddr>>()
+        .map(|info| info.0.ip())
+        .unwrap_or(IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED))
+}
+async fn security(State(app): State<Arc<App>>, mut request: Request, next: Next) -> Response {
+    let source = auth_source(&app, &request);
+    request.extensions_mut().insert(AuthSource(source));
     let mutation = matches!(
         *request.method(),
         axum::http::Method::POST
@@ -432,11 +485,12 @@ struct Credentials {
 }
 async fn login(
     State(app): State<Arc<App>>,
+    Extension(source): Extension<AuthSource>,
     Json(input): Json<Credentials>,
 ) -> Result<impl IntoResponse> {
     let email = valid_email(&input.email)?;
     valid_password(&input.password)?;
-    app.throttle(&email)?;
+    app.throttle(source.0, &email)?;
     let _slot = app
         .password_slots
         .clone()
@@ -453,15 +507,17 @@ async fn login(
     if !valid || credentials.is_none() {
         return Err(ApiError(StatusCode::UNAUTHORIZED, "邮箱或密码错误".into()));
     }
-    let user = app.store.user(credentials.unwrap().0)?;
+    let (id, _, version) = credentials.unwrap();
+    let user = app.store.user(id)?;
     if !user.enabled {
         return Err(ApiError::forbidden("账号已停用"));
     }
-    let secret = app.store.new_session(user.id)?;
+    let secret = app.store.new_session(user.id, version)?;
     Ok((set_cookie(&app, &secret, false), Json(user)))
 }
 async fn register(
     State(app): State<Arc<App>>,
+    Extension(source): Extension<AuthSource>,
     Json(input): Json<Credentials>,
 ) -> Result<impl IntoResponse> {
     if !app.config.registration_open {
@@ -469,7 +525,7 @@ async fn register(
     }
     let email = valid_email(&input.email)?;
     valid_password(&input.password)?;
-    app.throttle(&email)?;
+    app.throttle(source.0, &email)?;
     let _slot = app
         .password_slots
         .clone()
@@ -481,7 +537,7 @@ async fn register(
     })
     .await
     .map_err(|_| ApiError::internal())??;
-    let secret = app.store.new_session(user.id)?;
+    let secret = app.store.new_session(user.id, user.auth_version)?;
     Ok((set_cookie(&app, &secret, false), Json(user)))
 }
 async fn logout(State(app): State<Arc<App>>, headers: HeaderMap) -> Result<impl IntoResponse> {
@@ -495,7 +551,7 @@ async fn me(State(app): State<Arc<App>>, headers: HeaderMap) -> Result<Json<User
 }
 async fn get_model(State(app): State<Arc<App>>, headers: HeaderMap) -> Result<Json<Value>> {
     let user = app.user(&headers)?;
-    Ok(Json(match app.store.model(user.id)? {
+    Ok(Json(match app.bound_model(user.id)? {
         Some(c) => {
             json!({"providerId":c.provider_id,"model":c.model,"hasKey":true,"temperature":c.temperature,"maxTokens":c.max_tokens})
         }
@@ -517,14 +573,12 @@ async fn save_model(
     Json(input): Json<ModelInput>,
 ) -> Result<Json<Value>> {
     let user = app.user(&headers)?;
-    if !app
+    let preset = app
         .config
         .providers
         .iter()
-        .any(|p| p.id == input.provider_id)
-    {
-        return Err(ApiError::bad("只能选择管理员允许的供应商"));
-    }
+        .find(|p| p.id == input.provider_id)
+        .ok_or_else(|| ApiError::bad("只能选择管理员允许的供应商"))?;
     if input.model.trim().is_empty()
         || input.model.len() > 200
         || input.model.chars().any(char::is_control)
@@ -542,8 +596,7 @@ async fn save_model(
         }
         crypto::seal(&app.config.master_key, user.id, &key).map_err(|_| ApiError::internal())?
     } else {
-        app.store
-            .model(user.id)?
+        app.bound_model(user.id)?
             .filter(|c| c.provider_id == input.provider_id)
             .ok_or_else(|| ApiError::bad("首次配置或更换供应商时需要填写 API Key"))?
             .encrypted_key
@@ -552,6 +605,7 @@ async fn save_model(
         user.id,
         &ModelConfig {
             provider_id: input.provider_id,
+            provider_base_url: preset.base_url.clone(),
             model: input.model.trim().into(),
             encrypted_key,
             temperature,
@@ -580,7 +634,7 @@ async fn create_token(
     {
         return Err(ApiError::bad("令牌名称须为 1–80 字节"));
     }
-    if app.store.model(u.id)?.is_none() {
+    if app.bound_model(u.id)?.is_none() {
         return Err(ApiError::bad("请先保存模型及 API Key"));
     }
     let mut token = app.store.create_token(u.id, input.name.trim())?;
@@ -641,7 +695,7 @@ async fn records(
     Ok(Json(
         serde_json::to_value(
             db.db
-                .list_records(page, size)
+                .list_hosted_records(page, size)
                 .map_err(|_| ApiError::internal())?,
         )
         .map_err(|_| ApiError::internal())?,
@@ -761,7 +815,10 @@ pub async fn run() -> std::result::Result<(), String> {
         .await
         .map_err(|_| "Cannot bind HOSTED_BIND")?;
     eprintln!("ai2tiku hosted listening on {bind}");
-    axum::serve(listener, router(app))
-        .await
-        .map_err(|_| "HTTP server failed".into())
+    axum::serve(
+        listener,
+        router(app).into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await
+    .map_err(|_| "HTTP server failed".into())
 }

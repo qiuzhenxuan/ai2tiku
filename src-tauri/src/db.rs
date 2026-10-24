@@ -210,6 +210,29 @@ fn err<E: std::fmt::Display>(e: E) -> String {
     e.to_string()
 }
 
+#[cfg(feature = "hosted")]
+pub(crate) mod hosted_record {
+    pub const TITLE_BYTES: usize = 50_000;
+    pub const OPTIONS_BYTES: usize = 100_000;
+    pub const ANSWER_BYTES: usize = 64 * 1024;
+    pub const EXPLANATION_BYTES: usize = 64 * 1024;
+
+    pub fn text(value: &str, max: usize) -> String {
+        let mut end = max.min(value.len());
+        while !value.is_char_boundary(end) {
+            end -= 1;
+        }
+        value[..end].to_owned()
+    }
+
+    pub fn qtype(value: &str) -> &str {
+        match value {
+            "single" | "multiple" | "judgement" | "completion" | "" | "unknown" => value,
+            _ => "unknown",
+        }
+    }
+}
+
 impl Db {
     pub fn open(path: &std::path::Path) -> R<Self> {
         if let Some(dir) = path.parent() {
@@ -984,6 +1007,108 @@ impl Db {
         Ok(conn.last_insert_rowid())
     }
 
+    /// Keep hosted request and provider text within a fixed storage budget.
+    /// The desktop API retains its original full-text behavior.
+    #[cfg(feature = "hosted")]
+    pub fn record_hosted(&self, record: &SearchRecord) -> R<i64> {
+        use hosted_record::*;
+        self.record(&SearchRecord {
+            id: record.id,
+            title: text(&record.title, TITLE_BYTES),
+            options: text(&record.options, OPTIONS_BYTES),
+            qtype: qtype(&record.qtype).into(),
+            answer: text(&record.answer, ANSWER_BYTES),
+            explanation: text(&record.explanation, EXPLANATION_BYTES),
+            source: text(&record.source, 32),
+            provider: text(&record.provider, 200),
+            model: text(&record.model, 200),
+            status: text(&record.status, 16),
+            error: text(&record.error, 2048),
+            prompt_tokens: record.prompt_tokens,
+            completion_tokens: record.completion_tokens,
+            total_tokens: record.total_tokens,
+            duration_ms: record.duration_ms,
+            image_count: record.image_count,
+            created_at: String::new(),
+        })
+    }
+
+    /// Bound legacy rows in SQL before allocating their contents in Rust.
+    #[cfg(feature = "hosted")]
+    pub fn list_hosted_records(&self, page: i64, page_size: i64) -> R<Page<SearchRecord>> {
+        use hosted_record::*;
+        fn text(row: &rusqlite::Row<'_>, index: usize) -> rusqlite::Result<String> {
+            let bytes: Vec<u8> = row.get::<_, Option<Vec<u8>>>(index)?.unwrap_or_default();
+            // SQL cuts bytes, so omit a possible incomplete final UTF-8 scalar.
+            let end = std::str::from_utf8(&bytes)
+                .map(|_| bytes.len())
+                .unwrap_or_else(|e| e.valid_up_to());
+            Ok(String::from_utf8_lossy(&bytes[..end]).into_owned())
+        }
+        let page = page.clamp(1, 1_000_000);
+        let page_size = page_size.clamp(1, 20);
+        let conn = self.lock()?;
+        let total = conn
+            .query_row("SELECT COUNT(*) FROM records", [], |r| r.get(0))
+            .map_err(err)?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, substr(CAST(title AS BLOB),1,?3), substr(CAST(answer AS BLOB),1,?4),
+                    substr(CAST(source AS BLOB),1,32), substr(CAST(provider AS BLOB),1,200),
+                    substr(CAST(model AS BLOB),1,200), prompt_tokens, completion_tokens,
+                    total_tokens, duration_ms, substr(CAST(created_at AS BLOB),1,40),
+                    substr(CAST(options AS BLOB),1,?5),
+                    CAST(CASE WHEN length(CAST(qtype AS BLOB))<=10
+                         AND qtype IN ('single','multiple','judgement','completion','','unknown')
+                         THEN qtype ELSE 'unknown' END AS BLOB),
+                    substr(CAST(status AS BLOB),1,16), substr(CAST(error AS BLOB),1,2048),
+                    substr(CAST(explanation AS BLOB),1,?6), image_count
+             FROM records ORDER BY id DESC LIMIT ?1 OFFSET ?2",
+            )
+            .map_err(err)?;
+        let items = stmt
+            .query_map(
+                params![
+                    page_size,
+                    (page - 1) * page_size,
+                    TITLE_BYTES as i64,
+                    ANSWER_BYTES as i64,
+                    OPTIONS_BYTES as i64,
+                    EXPLANATION_BYTES as i64
+                ],
+                |r| {
+                    Ok(SearchRecord {
+                        id: r.get(0)?,
+                        title: text(r, 1)?,
+                        answer: text(r, 2)?,
+                        source: text(r, 3)?,
+                        provider: text(r, 4)?,
+                        model: text(r, 5)?,
+                        prompt_tokens: r.get(6)?,
+                        completion_tokens: r.get(7)?,
+                        total_tokens: r.get(8)?,
+                        duration_ms: r.get(9)?,
+                        created_at: text(r, 10)?,
+                        options: text(r, 11)?,
+                        qtype: text(r, 12)?,
+                        status: text(r, 13)?,
+                        error: text(r, 14)?,
+                        explanation: text(r, 15)?,
+                        image_count: r.get(16)?,
+                    })
+                },
+            )
+            .map_err(err)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(err)?;
+        Ok(Page {
+            items,
+            total,
+            page,
+            page_size,
+        })
+    }
+
     pub fn list_records(&self, page: i64, page_size: i64) -> R<Page<SearchRecord>> {
         let conn = self.lock()?;
         let total: i64 = conn
@@ -1164,6 +1289,86 @@ mod tests {
         let path = std::env::temp_dir().join(format!("ai2tiku-test-{}.db", name));
         let _ = std::fs::remove_file(&path);
         Db::open(&path).expect("建库失败")
+    }
+
+    #[cfg(feature = "hosted")]
+    #[test]
+    fn hosted_records_bound_every_text_field_and_normalize_invalid_types() {
+        let db = temp_db("hosted-record-budget");
+        let large = "文".repeat(400_000);
+        db.record_hosted(&SearchRecord {
+            title: large.clone(),
+            options: large.clone(),
+            answer: large.clone(),
+            explanation: large.clone(),
+            qtype: large.clone(),
+            source: large.clone(),
+            provider: large.clone(),
+            model: large.clone(),
+            status: large.clone(),
+            error: large,
+            ..Default::default()
+        })
+        .unwrap();
+        let record = db.list_records(1, 1).unwrap().items.remove(0);
+        for (text, limit) in [
+            (&record.title, hosted_record::TITLE_BYTES),
+            (&record.options, hosted_record::OPTIONS_BYTES),
+            (&record.answer, hosted_record::ANSWER_BYTES),
+            (&record.explanation, hosted_record::EXPLANATION_BYTES),
+            (&record.source, 32),
+            (&record.provider, 200),
+            (&record.model, 200),
+            (&record.status, 16),
+            (&record.error, 2048),
+        ] {
+            assert!(text.len() <= limit);
+            assert!(
+                limit - text.len() < 3,
+                "valid UTF-8 prefix should retain its budget"
+            );
+        }
+        assert_eq!(record.qtype, "unknown");
+    }
+
+    #[cfg(feature = "hosted")]
+    #[test]
+    fn hosted_reads_bound_legacy_rows_without_modifying_desktop_data() {
+        let db = temp_db("hosted-legacy-record-budget");
+        let large = "文".repeat(400_000);
+        let legacy = SearchRecord {
+            title: large.clone(),
+            options: large.clone(),
+            answer: large.clone(),
+            explanation: large.clone(),
+            qtype: large.clone(),
+            source: large.clone(),
+            provider: large.clone(),
+            model: large.clone(),
+            status: large.clone(),
+            error: large.clone(),
+            ..Default::default()
+        };
+        for _ in 0..20 {
+            db.record(&SearchRecord::default()).unwrap();
+        }
+        db.record(&legacy).unwrap();
+        let page = db.list_hosted_records(1, 100).unwrap();
+        assert_eq!(page.page_size, 20);
+        assert_eq!(page.items.len(), 20);
+        assert_eq!(page.total, 21);
+        let first = &page.items[0];
+        assert_eq!(first.qtype, "unknown");
+        assert!(first.title.len() <= hosted_record::TITLE_BYTES);
+        assert!(first.options.len() <= hosted_record::OPTIONS_BYTES);
+        assert!(first.answer.len() <= hosted_record::ANSWER_BYTES);
+        assert!(first.explanation.len() <= hosted_record::EXPLANATION_BYTES);
+        assert!(first.source.len() <= 32 && first.provider.len() <= 200);
+        assert!(first.model.len() <= 200 && first.status.len() <= 16 && first.error.len() <= 2048);
+        let full = db.list_records(1, 1).unwrap().items.remove(0);
+        assert_eq!(full.title, large);
+        assert_eq!(full.qtype, large);
+        assert_eq!(full.answer, large);
     }
 
     fn manual(db: &Db, title: &str, options: &str, answer: &str) {

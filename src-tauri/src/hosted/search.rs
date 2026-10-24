@@ -1,4 +1,5 @@
 use super::*;
+use crate::db::hosted_record;
 use crate::models::{AiModel, Provider, SearchOutcome, SearchQuery, SearchRecord};
 use axum::body::to_bytes;
 use std::time::Instant;
@@ -100,12 +101,12 @@ pub(super) async fn answer(
     let parsed = body
         .ok()
         .and_then(std::result::Result::ok)
-        .and_then(|bytes| serde_json::from_slice::<SearchQuery>(&bytes).ok());
+        .and_then(|bytes| input::parse(&bytes).ok());
     let q = parsed.unwrap_or_default();
     let mut record = SearchRecord {
-        title: q.ask_title().into(),
-        options: q.ask_options().into(),
-        qtype: q.qtype.clone(),
+        title: hosted_record::text(q.ask_title(), hosted_record::TITLE_BYTES),
+        options: hosted_record::text(q.ask_options(), hosted_record::OPTIONS_BYTES),
+        qtype: hosted_record::qtype(&q.qtype).into(),
         image_count: q.images.len() as i64,
         ..Default::default()
     };
@@ -114,8 +115,6 @@ pub(super) async fn answer(
         Ok(()) => resolve(&app, &tenant, &user, &q, &mut record).await,
     };
     outcome.duration_ms = started.elapsed().as_millis() as i64;
-    truncate(&mut record.title, 50_000);
-    truncate(&mut record.options, 100_000);
     record.answer = outcome.answer.clone().unwrap_or_default();
     record.error = outcome.msg.clone().unwrap_or_default();
     record.status = if outcome.code == 1 {
@@ -128,17 +127,10 @@ pub(super) async fn answer(
     record.duration_ms = outcome.duration_ms;
     record.total_tokens = outcome.tokens;
     record.explanation = outcome.explanation.clone().unwrap_or_default();
-    if tenant.db.record(&record).is_err() {
+    if tenant.db.record_hosted(&record).is_err() {
         outcome.msg = Some("答题记录保存失败，请联系管理员".into());
     }
     Ok(Json(outcome))
-}
-fn truncate(value: &mut String, max: usize) {
-    let mut end = max.min(value.len());
-    while !value.is_char_boundary(end) {
-        end -= 1;
-    }
-    value.truncate(end);
 }
 async fn resolve(
     app: &App,
@@ -172,7 +164,7 @@ async fn resolve(
             Err(_) => return failure("查询题库失败，请联系管理员"),
         }
     }
-    let config = match app.store.model(user.id) {
+    let config = match app.bound_model(user.id) {
         Ok(Some(c)) => c,
         _ => return failure("请先在网页端配置模型及 API Key"),
     };
@@ -228,7 +220,7 @@ async fn resolve(
     )
     .await;
     match response {
-        Ok(Ok(answer)) => {
+        Ok(Ok(mut answer)) => {
             record.prompt_tokens = answer.prompt_tokens;
             record.completion_tokens = answer.completion_tokens;
             outcome.tokens = answer.total_tokens;
@@ -241,6 +233,14 @@ async fn resolve(
                 outcome.msg = Some("模型回复包含敏感信息，已拦截".into());
                 return outcome;
             }
+            // Do not cache or return a silently truncated answer. Explanation
+            // text can be shortened without changing the answer itself.
+            if answer.answer.len() > hosted_record::ANSWER_BYTES {
+                outcome.msg = Some("模型答案过长，已拒绝保存，请调整题目后重试".into());
+                return outcome;
+            }
+            answer.explanation =
+                hosted_record::text(&answer.explanation, hosted_record::EXPLANATION_BYTES);
             outcome.code = 1;
             outcome.question = Some(title.into());
             outcome.answer = Some(answer.answer.clone());
@@ -266,4 +266,67 @@ async fn resolve(
         Err(_) => outcome.msg = Some("模型请求超时，已记录此次失败请求".into()),
     }
     outcome
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::body::Body;
+    use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn hosted_rejects_megabyte_type_without_persisting_it() {
+        let directory =
+            std::env::temp_dir().join(format!("ai2tiku-hosted-invalid-type-{}", crypto::random()));
+        let app = App::open(Config {
+            data_dir: directory.clone(),
+            public_url: "http://localhost:4185".into(),
+            bind: "127.0.0.1:0".into(),
+            master_key: [5; 32],
+            admin_email: "owner@invalid-type.test".into(),
+            admin_password: "local-test-password".into(),
+            registration_open: false,
+            providers: vec![],
+            trusted_source_header: None,
+        })
+        .unwrap();
+        let id = app
+            .store
+            .credentials("owner@invalid-type.test")
+            .unwrap()
+            .unwrap()
+            .0;
+        let token = app.store.create_token(id, "invalid-type-test").unwrap();
+        let response = router(app.clone())
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/search")
+                    .header(
+                        "authorization",
+                        format!("Bearer {}", token["token"].as_str().unwrap()),
+                    )
+                    .body(Body::from(
+                        json!({"title":"valid title", "type":"x".repeat(7*1024*1024)}).to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let outcome: Value =
+            serde_json::from_slice(&to_bytes(response.into_body(), 4096).await.unwrap()).unwrap();
+        assert_eq!(outcome["code"], 0);
+        let tenant = app.tenant(id).unwrap();
+        let full = tenant.db.list_records(1, 20).unwrap();
+        assert_eq!(full.items.len(), 1);
+        assert_eq!(full.items[0].qtype, "unknown");
+        assert_eq!(full.items[0].status, "failure");
+        let listed = tenant.db.list_hosted_records(1, 100).unwrap();
+        assert!(serde_json::to_vec(&listed).unwrap().len() < 4096);
+        drop(tenant);
+        drop(app);
+        assert!(directory.starts_with(std::env::temp_dir()));
+        std::fs::remove_dir_all(directory).unwrap();
+    }
 }

@@ -24,6 +24,8 @@ pub struct User {
     pub enabled: bool,
     pub daily_limit: i64,
     pub used_today: i64,
+    #[serde(skip)]
+    pub auth_version: i64,
 }
 impl User {
     pub fn admin(&self) -> Result<()> {
@@ -37,6 +39,7 @@ impl User {
 #[derive(Clone)]
 pub struct ModelConfig {
     pub provider_id: String,
+    pub provider_base_url: String,
     pub model: String,
     pub encrypted_key: String,
     pub temperature: f64,
@@ -51,12 +54,13 @@ fn user(row: &rusqlite::Row<'_>) -> rusqlite::Result<User> {
         enabled: row.get(3)?,
         daily_limit: row.get(4)?,
         used_today: row.get(5)?,
+        auth_version: row.get(6)?,
     })
 }
-const USERS:&str="SELECT u.id,u.email,u.role,u.enabled,u.daily_limit,coalesce((SELECT count FROM quota WHERE user_id=u.id AND day=date('now')),0) FROM users u";
+const USERS:&str="SELECT u.id,u.email,u.role,u.enabled,u.daily_limit,coalesce((SELECT count FROM quota WHERE user_id=u.id AND day=date('now')),0),u.auth_version FROM users u";
 impl Store {
     pub fn open(path: &Path) -> Result<Self> {
-        let conn = Connection::open(path)?;
+        let mut conn = Connection::open(path)?;
         conn.busy_timeout(std::time::Duration::from_secs(5))?;
         conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;
           CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY,email TEXT NOT NULL UNIQUE,password TEXT NOT NULL,role TEXT NOT NULL CHECK(role IN ('admin','user')),enabled INTEGER NOT NULL DEFAULT 1,daily_limit INTEGER NOT NULL DEFAULT 1000,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
@@ -65,6 +69,25 @@ impl Store {
           CREATE TABLE IF NOT EXISTS tokens(id INTEGER PRIMARY KEY,user_id INTEGER NOT NULL REFERENCES users(id),hash TEXT NOT NULL UNIQUE,prefix TEXT NOT NULL,name TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,last_used_at TEXT,revoked INTEGER NOT NULL DEFAULT 0);
           CREATE TABLE IF NOT EXISTS quota(user_id INTEGER NOT NULL REFERENCES users(id),day TEXT NOT NULL,count INTEGER NOT NULL,PRIMARY KEY(user_id,day));
           CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY,actor_id INTEGER,action TEXT NOT NULL,target_id INTEGER,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);")?;
+        let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        for (table, column, declaration) in [
+            ("users", "auth_version", "INTEGER NOT NULL DEFAULT 0"),
+            ("models", "provider_base_url", "TEXT NOT NULL DEFAULT ''"),
+        ] {
+            let exists = tx
+                .prepare(&format!("PRAGMA table_info({table})"))?
+                .query_map([], |r| r.get::<_, String>(1))?
+                .collect::<std::result::Result<Vec<_>, _>>()?
+                .iter()
+                .any(|name| name == column);
+            if !exists {
+                tx.execute(
+                    &format!("ALTER TABLE {table} ADD COLUMN {column} {declaration}"),
+                    [],
+                )?;
+            }
+        }
+        tx.commit()?;
         Ok(Self(Mutex::new(conn)))
     }
     pub fn lock(&self) -> Result<MutexGuard<'_, Connection>> {
@@ -94,13 +117,13 @@ impl Store {
             .optional()?
             .ok_or_else(ApiError::unauthorized)
     }
-    pub fn credentials(&self, email: &str) -> Result<Option<(i64, String)>> {
+    pub fn credentials(&self, email: &str) -> Result<Option<(i64, String, i64)>> {
         Ok(self
             .lock()?
             .query_row(
-                "SELECT id,password FROM users WHERE email=?1",
+                "SELECT id,password,auth_version FROM users WHERE email=?1",
                 [email],
-                |r| Ok((r.get(0)?, r.get(1)?)),
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
             )
             .optional()?)
     }
@@ -149,10 +172,23 @@ impl Store {
         }
         Ok(u)
     }
-    pub fn new_session(&self, id: i64) -> Result<String> {
+    pub fn new_session(&self, id: i64, expected_version: i64) -> Result<String> {
         let token = crypto::random();
         let mut conn = self.lock()?;
-        let tx = conn.transaction()?;
+        let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        // Commit authentication only if the credentials verified before Argon2
+        // work are still current. Reset/disable and insertion share one lock.
+        let (enabled, version): (bool, i64) = tx
+            .query_row(
+                "SELECT enabled,auth_version FROM users WHERE id=?1",
+                [id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .optional()?
+            .ok_or_else(ApiError::unauthorized)?;
+        if !enabled || version != expected_version {
+            return Err(ApiError::unauthorized());
+        }
         tx.execute("DELETE FROM sessions WHERE expires<=?1", [epoch()])?;
         // Bound live sessions per user while allowing several browsers.
         tx.execute("DELETE FROM sessions WHERE user_id=?1 AND hash NOT IN (SELECT hash FROM sessions WHERE user_id=?1 ORDER BY expires DESC LIMIT 9)",[id])?;
@@ -189,12 +225,37 @@ impl Store {
         Ok(u)
     }
     pub fn model(&self, id: i64) -> Result<Option<ModelConfig>> {
-        Ok(self.lock()?.query_row("SELECT provider_id,model,encrypted_key,temperature,max_tokens FROM models WHERE user_id=?1",[id],|r|Ok(ModelConfig{provider_id:r.get(0)?,model:r.get(1)?,encrypted_key:r.get(2)?,temperature:r.get(3)?,max_tokens:r.get(4)?})).optional()?)
+        Ok(self.lock()?.query_row("SELECT provider_id,model,encrypted_key,temperature,max_tokens,provider_base_url FROM models WHERE user_id=?1",[id],|r|Ok(ModelConfig{provider_id:r.get(0)?,model:r.get(1)?,encrypted_key:r.get(2)?,temperature:r.get(3)?,max_tokens:r.get(4)?,provider_base_url:r.get(5)?})).optional()?)
+    }
+    pub fn bind_legacy_builtin_models(&self) -> Result<()> {
+        let mut conn = self.lock()?;
+        let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        let done: bool = tx.query_row(
+            "SELECT EXISTS(SELECT 1 FROM metadata WHERE key='provider-binding-v1')",
+            [],
+            |r| r.get(0),
+        )?;
+        if !done {
+            // Only the fixed built-in destinations from the previous release
+            // have known historical identities. Never guess legacy custom-N.
+            for preset in crate::presets::PRESETS
+                .iter()
+                .filter(|p| p.base_url.starts_with("https://"))
+            {
+                tx.execute("UPDATE models SET provider_base_url=?2 WHERE provider_id=?1 AND provider_base_url=''", params![preset.id,preset.base_url])?;
+            }
+            tx.execute(
+                "INSERT INTO metadata(key,value) VALUES('provider-binding-v1','1')",
+                [],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
     }
     pub fn save_model(&self, id: i64, c: &ModelConfig) -> Result<()> {
         let mut conn = self.lock()?;
         let tx = conn.transaction()?;
-        tx.execute("INSERT INTO models VALUES(?1,?2,?3,?4,?5,?6) ON CONFLICT(user_id) DO UPDATE SET provider_id=excluded.provider_id,model=excluded.model,encrypted_key=excluded.encrypted_key,temperature=excluded.temperature,max_tokens=excluded.max_tokens",params![id,c.provider_id,c.model,c.encrypted_key,c.temperature,c.max_tokens])?;
+        tx.execute("INSERT INTO models(user_id,provider_id,model,encrypted_key,temperature,max_tokens,provider_base_url) VALUES(?1,?2,?3,?4,?5,?6,?7) ON CONFLICT(user_id) DO UPDATE SET provider_id=excluded.provider_id,model=excluded.model,encrypted_key=excluded.encrypted_key,temperature=excluded.temperature,max_tokens=excluded.max_tokens,provider_base_url=excluded.provider_base_url",params![id,c.provider_id,c.model,c.encrypted_key,c.temperature,c.max_tokens,c.provider_base_url])?;
         tx.execute(
             "INSERT INTO audit(actor_id,action,target_id) VALUES(?1,'model.update',?1)",
             [id],
@@ -319,7 +380,7 @@ impl Store {
         if role == "admin" && enabled == Some(false) {
             return Err(ApiError::bad("不能停用管理员账号"));
         }
-        tx.execute("UPDATE users SET enabled=coalesce(?2,enabled),daily_limit=coalesce(?3,daily_limit),password=coalesce(?4,password) WHERE id=?1",params![id,enabled,limit,encoded])?;
+        tx.execute("UPDATE users SET enabled=coalesce(?2,enabled),daily_limit=coalesce(?3,daily_limit),password=coalesce(?4,password),auth_version=auth_version+?5 WHERE id=?1",params![id,enabled,limit,encoded,i64::from(password.is_some() || enabled == Some(false))])?;
         if password.is_some() || enabled == Some(false) {
             tx.execute("DELETE FROM sessions WHERE user_id=?1", [id])?;
         }

@@ -66,6 +66,14 @@ docker compose --env-file deploy/.env -f deploy/compose.yaml ps
 
 让服务器上的 HTTPS 反向代理将 `tiku.example.com` 转发到 `http://127.0.0.1:8080`。反向代理的请求超时建议至少 180 秒，以容纳模型调用和一次格式重试。浏览器和 OCS 使用 HTTPS 公网域名，不直接访问 API 容器。
 
+### 登录限流与代理来源
+
+源站服务默认使用实际 TCP 来源，不信任浏览器提交的转发头。若采用公网 HTTPS 代理 → 回环地址 Docker 入口的部署方式，公网代理必须用 `proxy_set_header X-Real-IP $remote_addr;` 和 `proxy_set_header X-Forwarded-For $remote_addr;` 覆盖来访者提交的对应头，再在 `deploy/.env` 设置 `HOSTED_TRUSTED_SOURCE_HEADER=x-real-ip`。API 不能另行发布公网端口，容器入口应保持 `127.0.0.1` 绑定。该选项只应在这条受控代理链中启用。
+
+入口每客户端限流放在真正面向公网的代理层，不在看到同一网桥地址的内层容器按 IP 合并限流。例如，在 Nginx `http` 中定义 `limit_req_zone $binary_remote_addr zone=ai2tiku_public_login:10m rate=10r/m;`，在登录和注册 location 中设置 `limit_req zone=ai2tiku_public_login burst=10 nodelay; limit_req_status 429;`，并保留前述覆盖转发头及 proxy_pass。其他路径正常转发。来源键语义见 [Nginx 官方限流文档](https://nginx.org/en/docs/http/ngx_http_limit_req_module.html)。
+
+服务端仍限制同一来源每分钟 30 次、同一来源与邮箱组合每分钟 5 次，并以独立密码校验并发控制保护资源；不同来源不会共享邮箱硬锁。公司或校园共用同一出口 IP 的用户仍共享该来源额度，应按实际使用情况调整入口策略。
+
 默认只监听服务器回环地址。需要接入其他代理容器时，按实际网络拓扑调整 `LISTEN_ADDRESS` 和网络配置。生产站点使用 HTTPS；`http://localhost:8080` 可用于本机测试。
 
 ## 管理与密钥
@@ -77,6 +85,8 @@ docker compose --env-file deploy/.env -f deploy/compose.yaml ps
 - 每个用户有独立的题库与答题记录。管理员列表不返回用户模型 Key 或题库令牌明文。
 - 不将模型 Key 放进题库 URL、OCS 配置、请求记录或管理审计记录。
 - 默认供应商由服务器预设控制，不允许普通用户填写任意内网地址。扩展供应商须由站长配置并审查目标地址。
+
+模型 Key 会绑定供应商的具体规范地址。修改自定义供应商列表顺序不会改变其标识；修改目标地址后需重新填写 Key。升级前的 `custom-1` 等位置编号无法证明历史地址，必须重新配置；内置供应商按已知固定目标兼容迁移，已有题库和访问令牌保留。密码重置或停用会递增凭据版本，并在创建会话的事务内核对版本，避免过期的登录验证结果生效。
 
 “只保存摘要”的是本站生成的题库令牌。模型 Key 必须能由服务器解密，才能代用户调用模型。掌握数据库和加密主密钥的服务器管理员具有解密能力。
 
@@ -102,6 +112,8 @@ docker compose --env-file deploy/.env -f deploy/compose.yaml up -d --build
 ```
 
 管理员初始密码仅用于首次创建管理员账号，不应把修改初始密码文件当成重置已有密码的方式。请通过后台已有的密码管理功能处理。
+
+此版本增加认证版本和供应商地址绑定字段。升级前保留完整一致备份；若要回退旧版应用，应同时恢复相匹配的备份数据库，不能直接将旧应用与升级后的数据库混用。
 
 ## 本地开发
 

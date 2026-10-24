@@ -33,8 +33,7 @@ pub(super) async fn models(
         }
         None => {
             let stored = app
-                .store
-                .model(user.id)?
+                .bound_model(user.id)?
                 .filter(|c| c.provider_id == input.provider_id)
                 .ok_or_else(|| ApiError::bad("请先填写当前供应商的 API Key，再获取模型列表"))?;
             crypto::open(&app.config.master_key, user.id, &stored.encrypted_key)

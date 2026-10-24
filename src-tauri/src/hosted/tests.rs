@@ -7,6 +7,217 @@ use tower::ServiceExt;
 
 struct TestDirectory(PathBuf);
 
+#[tokio::test]
+async fn session_creation_atomically_rejects_credentials_verified_before_reset_or_disable() {
+    let f = Fixture::new();
+    let (_, _, old_version) = f
+        .app
+        .store
+        .credentials("test@example.com")
+        .unwrap()
+        .unwrap();
+    let user = f
+        .app
+        .store
+        .update_user(1, f.user_id, None, None, Some("replacement-test-password"))
+        .unwrap();
+    assert_eq!(user.auth_version, old_version + 1);
+    assert_eq!(
+        f.app
+            .store
+            .new_session(f.user_id, old_version)
+            .unwrap_err()
+            .0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert!(f.app.store.session(&f.user).is_err());
+    let current = f
+        .app
+        .store
+        .new_session(f.user_id, user.auth_version)
+        .unwrap();
+    assert!(f.app.store.session(&current).is_ok());
+    f.app
+        .store
+        .update_user(1, f.user_id, Some(false), None, None)
+        .unwrap();
+    f.app
+        .store
+        .update_user(1, f.user_id, Some(true), None, None)
+        .unwrap();
+    assert!(
+        f.app
+            .store
+            .new_session(f.user_id, user.auth_version)
+            .is_err(),
+        "Re-enabling must not revive an old verification"
+    );
+    let (status, _) = f
+        .request(
+            "POST",
+            "/api/console/auth/login",
+            None,
+            json!({"email":"test@example.com","password":"replacement-test-password"}),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+}
+
+#[test]
+fn login_limits_are_isolated_by_source_and_ignore_untrusted_forwarded_headers() {
+    let mut f = Fixture::new();
+    let first: IpAddr = "192.0.2.1".parse().unwrap();
+    let second: IpAddr = "192.0.2.2".parse().unwrap();
+    for _ in 0..5 {
+        f.app.throttle(first, "owner@example.com").unwrap();
+    }
+    assert!(f.app.throttle(first, "owner@example.com").is_err());
+    f.app.throttle(second, "owner@example.com").unwrap();
+    for i in 0..25 {
+        f.app
+            .throttle(first, &format!("other-{i}@example.com"))
+            .unwrap();
+    }
+    assert!(f.app.throttle(first, "new@example.com").is_err());
+    f.app.throttle(second, "new@example.com").unwrap();
+    let mut request = Request::builder()
+        .header("x-real-ip", "192.0.2.99")
+        .body(Body::empty())
+        .unwrap();
+    request
+        .extensions_mut()
+        .insert(ConnectInfo(SocketAddr::new(first, 1234)));
+    assert_eq!(auth_source(&f.app, &request), first);
+    Arc::get_mut(&mut f.app)
+        .unwrap()
+        .config
+        .trusted_source_header = Some("x-real-ip".into());
+    assert_eq!(
+        auth_source(&f.app, &request),
+        "192.0.2.99".parse::<IpAddr>().unwrap()
+    );
+    request.headers_mut().insert(
+        "x-real-ip",
+        HeaderValue::from_static("192.0.2.99, 192.0.2.98"),
+    );
+    assert_eq!(auth_source(&f.app, &request), first);
+}
+
+#[test]
+fn custom_provider_identity_does_not_depend_on_position_and_normalizes_base_urls() {
+    let first = provider_url("https://ONE.invalid:443/v1/").unwrap();
+    let same = provider_url("https://one.invalid/v1").unwrap();
+    let second = provider_url("https://two.invalid/v1").unwrap();
+    assert_eq!(custom_provider_id(&first), custom_provider_id(&same));
+    assert_ne!(custom_provider_id(&first), custom_provider_id(&second));
+}
+
+#[tokio::test]
+async fn a_saved_key_cannot_follow_a_changed_provider_destination() {
+    let mut f = Fixture::new();
+    let token = f.token().await;
+    let ciphertext = f.app.store.model(f.user_id).unwrap().unwrap().encrypted_key;
+    Arc::get_mut(&mut f.app).unwrap().config.providers[0].base_url =
+        "https://different.invalid/v1".into();
+    assert!(f.app.bound_model(f.user_id).unwrap().is_none());
+    let (status, model) = f
+        .request("GET", "/api/console/model", Some(&f.user), json!(null))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(model["hasKey"], false);
+    assert_eq!(
+        f.request(
+            "POST",
+            "/api/console/models/discover",
+            Some(&f.user),
+            json!({"providerId":"deepseek"})
+        )
+        .await
+        .0,
+        StatusCode::BAD_REQUEST
+    );
+    assert_eq!(
+        f.request(
+            "PUT",
+            "/api/console/model",
+            Some(&f.user),
+            json!({"providerId":"deepseek","model":"chat"})
+        )
+        .await
+        .0,
+        StatusCode::BAD_REQUEST
+    );
+    assert_eq!(
+        f.request(
+            "POST",
+            "/api/console/tokens",
+            Some(&f.user),
+            json!({"name":"blocked"})
+        )
+        .await
+        .0,
+        StatusCode::BAD_REQUEST
+    );
+    let response = router(f.app.clone())
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/search")
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::from(
+                    json!({"title":"unique uncached title","type":"completion"}).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let data: Value =
+        serde_json::from_slice(&to_bytes(response.into_body(), 4096).await.unwrap()).unwrap();
+    assert_eq!(data["code"], 0);
+    assert_eq!(
+        f.app.store.model(f.user_id).unwrap().unwrap().encrypted_key,
+        ciphertext
+    );
+}
+
+#[test]
+fn legacy_builtin_keys_are_migrated_once_but_custom_position_keys_are_never_rebound() {
+    let f = Fixture::new();
+    {
+        let conn = f.app.store.lock().unwrap();
+        conn.execute("DELETE FROM metadata WHERE key='provider-binding-v1'", [])
+            .unwrap();
+        conn.execute("INSERT INTO models(user_id,provider_id,model,encrypted_key) VALUES(?1,'deepseek','chat','encrypted-test')", [f.user_id]).unwrap();
+        conn.execute("INSERT INTO models(user_id,provider_id,model,encrypted_key) VALUES(1,'custom-1','chat','encrypted-test')", []).unwrap();
+    }
+    f.app.store.bind_legacy_builtin_models().unwrap();
+    assert_eq!(
+        f.app
+            .store
+            .model(f.user_id)
+            .unwrap()
+            .unwrap()
+            .provider_base_url,
+        "https://api.deepseek.com/v1"
+    );
+    assert_eq!(f.app.store.model(1).unwrap().unwrap().provider_base_url, "");
+    assert!(f.app.bound_model(1).unwrap().is_none());
+    f.app
+        .store
+        .lock()
+        .unwrap()
+        .execute(
+            "UPDATE models SET provider_base_url='' WHERE user_id=?1",
+            [f.user_id],
+        )
+        .unwrap();
+    f.app.store.bind_legacy_builtin_models().unwrap();
+    assert!(
+        f.app.bound_model(f.user_id).unwrap().is_none(),
+        "A later empty binding must not be silently inferred again"
+    );
+}
+
 struct ModelMetadataServer(tokio::task::JoinHandle<()>, String);
 impl Drop for ModelMetadataServer {
     fn drop(&mut self) {
@@ -302,6 +513,7 @@ impl Fixture {
             admin_email: "owner@example.com".into(),
             admin_password: "test-owner-password".into(),
             registration_open: false,
+            trusted_source_header: None,
             providers: vec![ProviderPreset {
                 id: "deepseek".into(),
                 name: "DeepSeek".into(),
@@ -320,8 +532,8 @@ impl Fixture {
             .store
             .create_user(Some(admin_id), "test@example.com", "test-user-password", 2)
             .unwrap();
-        let admin = app.store.new_session(admin_id).unwrap();
-        let session = app.store.new_session(user.id).unwrap();
+        let admin = app.store.new_session(admin_id, 0).unwrap();
+        let session = app.store.new_session(user.id, user.auth_version).unwrap();
         Self {
             app,
             admin,

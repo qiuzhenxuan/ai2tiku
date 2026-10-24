@@ -14,6 +14,7 @@ services:
       HOSTED_BIND: 0.0.0.0:8080
       REGISTRATION_OPEN: ${REGISTRATION_OPEN:-false}
       ALLOWED_PROVIDER_URLS: ${ALLOWED_PROVIDER_URLS:-}
+      HOSTED_TRUSTED_SOURCE_HEADER: ${HOSTED_TRUSTED_SOURCE_HEADER:-}
     secrets:
       - master_key
       - admin_password

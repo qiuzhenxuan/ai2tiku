@@ -47,17 +47,22 @@ const modelForm = reactive<ModelInput>({
   isDefault: false,
 });
 
-const providerName = computed(() => {
-  const map: Record<number, string> = {};
-  providers.value.forEach((p) => (map[p.id] = p.name));
-  return map;
-});
 
-const modelCount = computed(() => {
-  const map: Record<number, number> = {};
-  models.value.forEach((m) => (map[m.providerId] = (map[m.providerId] ?? 0) + 1));
-  return map;
-});
+const modelsOf = (providerId: number) => models.value.filter((m) => m.providerId === providerId);
+const settingDefault = ref<number | null>(null);
+
+async function setDefault(m: AiModel) {
+  settingDefault.value = m.id;
+  try {
+    await api.saveModel({ ...m, isDefault: true });
+    toast.ok(`已将「${m.displayName || m.model}」设为默认模型`);
+    await load();
+  } catch (e) {
+    toast.fromError(e);
+  } finally {
+    settingDefault.value = null;
+  }
+}
 
 async function load() {
   try {
@@ -140,14 +145,14 @@ async function removeProvider(item: Provider) {
   }
 }
 
-function openModel(item?: AiModel) {
+function openModel(item?: AiModel, providerId?: number) {
   if (providers.value.length === 0) {
     toast.info("请先添加一个 AI 供应商");
     return;
   }
   Object.assign(modelForm, {
     id: item?.id ?? null,
-    providerId: item?.providerId ?? providers.value[0].id,
+    providerId: item?.providerId ?? providerId ?? providers.value[0].id,
     model: item?.model ?? "",
     displayName: item?.displayName ?? "",
     temperature: item?.temperature ?? 0.3,
@@ -204,156 +209,90 @@ onMounted(async () => {
 
 <template>
   <div class="page">
-    <div class="callout callout--info">
-      <AppIcon name="info" :size="16" />
-      <div>
-        <div class="callout__title">只需填 Key 就能用</div>
-        在「新增供应商」里选一个预置厂商，名称与 <code class="mono">base_url</code> 会自动填好，
-        你只要粘贴 API Key。<strong>保存后会自动拉取该厂商的可用模型并填入</strong>。
-        预置没有的其他服务选「自定义」，手动填 <code class="mono">base_url</code>（写到
-        <code class="mono">/v1</code> 这一层）即可。
-      </div>
+    <div class="page-tools">
+      <span class="faint small">选一个预置厂商只需填 Key；保存后自动获取可用模型。默认模型用于 AI 作答。</span>
+      <button class="btn btn--primary" type="button" @click="openProvider()">
+        <AppIcon name="plus" :size="13" />
+        新增供应商
+      </button>
     </div>
 
-    <div class="card">
-      <div class="card__head">
-        <AppIcon name="globe" :size="15" />
-        <span class="card__title">AI 供应商</span>
-        <span class="card__hint">{{ providers.length }} 个</span>
-        <button class="btn btn--primary btn--sm" style="margin-left: auto" type="button" @click="openProvider()">
-          <AppIcon name="plus" :size="13" />
-          新增供应商
+    <div v-if="providers.length === 0" class="card empty empty--hero">
+      <span class="empty__icon"><AppIcon name="sparkles" :size="22" /></span>
+      <div class="empty__title">还没有配置 AI 供应商</div>
+      选一个预置厂商、粘贴 API Key，base_url 与模型都会自动就位
+      <div><button class="btn btn--primary" type="button" style="margin-top: 14px" @click="openProvider()">添加第一个供应商</button></div>
+    </div>
+
+    <section v-for="p in providers" :key="p.id" class="card provider" :class="{ 'is-disabled': !p.enabled }">
+      <header class="provider__head">
+        <span class="provider__avatar">{{ p.name.slice(0, 1) }}</span>
+        <div class="provider__meta">
+          <div class="row" style="gap: 8px">
+            <strong class="provider__name">{{ p.name }}</strong>
+            <span class="badge" :class="p.enabled ? 'badge--ok' : 'badge--off'"><span class="dot" />{{ p.enabled ? "启用" : "停用" }}</span>
+          </div>
+          <div class="provider__sub mono">
+            {{ p.baseUrl }} · <span :class="{ 'text-warn': !p.apiKey }">{{ p.apiKey ? "Key ••••" + p.apiKey.slice(-4) : "未填写 Key" }}</span>
+          </div>
+        </div>
+        <div class="row provider__actions">
+          <button class="btn btn--ghost btn--sm" type="button" :disabled="testing === p.id" @click="test(p)">
+            <AppIcon :name="testing === p.id ? 'refresh' : 'bolt'" :size="13" :class="{ spin: testing === p.id }" />
+            测试连通
+          </button>
+          <button class="btn btn--ghost btn--sm" type="button" :disabled="syncing === p.id" title="重新拉取该供应商的模型列表" @click="syncModels(p.id)">
+            <AppIcon name="refresh" :size="13" :class="{ spin: syncing === p.id }" />
+            拉取模型
+          </button>
+          <button class="btn btn--ghost btn--sm btn--icon" type="button" :aria-label="`编辑供应商：${p.name}`" title="编辑供应商" @click="openProvider(p)">
+            <AppIcon name="edit" :size="13" />
+          </button>
+          <button class="btn btn--ghost btn--sm btn--icon" type="button" :aria-label="`删除供应商：${p.name}`" title="删除供应商" @click="removeProvider(p)">
+            <AppIcon name="trash" :size="13" />
+          </button>
+        </div>
+      </header>
+
+      <ul v-if="modelsOf(p.id).length" class="model-list">
+        <li v-for="m in modelsOf(p.id)" :key="m.id" class="model-row" :class="{ 'is-default': m.isDefault, 'is-disabled': !m.enabled }">
+          <button
+            class="model-row__radio"
+            type="button"
+            :aria-pressed="m.isDefault"
+            :title="m.isDefault ? '当前默认模型' : '设为默认模型'"
+            :disabled="m.isDefault || settingDefault === m.id"
+            @click="setDefault(m)"
+          >
+            <span />
+          </button>
+          <div class="model-row__main">
+            <strong>{{ m.displayName || m.model }}</strong>
+            <span v-if="m.isDefault" class="badge badge--ai">默认</span>
+            <span v-if="!m.enabled" class="badge badge--off">停用</span>
+            <span v-if="m.displayName && m.displayName !== m.model" class="mono faint small">{{ m.model }}</span>
+          </div>
+          <span class="model-row__params faint small">温度 {{ m.temperature }} · 最大 {{ m.maxTokens }}</span>
+          <div class="row model-row__actions">
+            <button class="btn btn--ghost btn--sm btn--icon" type="button" :aria-label="`编辑模型：${m.displayName || m.model}`" title="编辑模型" @click="openModel(m)">
+              <AppIcon name="edit" :size="13" />
+            </button>
+            <button class="btn btn--ghost btn--sm btn--icon" type="button" :aria-label="`删除模型：${m.displayName || m.model}`" title="删除模型" @click="removeModel(m)">
+              <AppIcon name="trash" :size="13" />
+            </button>
+          </div>
+        </li>
+      </ul>
+      <div v-else class="provider__empty faint small">
+        还没有模型。点「拉取模型」自动获取，或手动添加。
+      </div>
+      <footer class="provider__foot">
+        <button class="btn btn--ghost btn--sm" type="button" @click="openModel(undefined, p.id)">
+          <AppIcon name="plus" :size="12" />
+          手动添加模型
         </button>
-      </div>
-
-      <div v-if="providers.length === 0" class="empty">
-        <div class="empty__title">还没有配置 AI 供应商</div>
-        选一个预置厂商、填上 Key 即可，base_url 与模型都会自动就位
-      </div>
-      <div v-else class="table-wrap">
-        <table class="table">
-          <thead>
-            <tr>
-              <th>名称</th>
-              <th>base_url</th>
-              <th>密钥</th>
-              <th class="num">模型</th>
-              <th>状态</th>
-              <th class="num">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="p in providers" :key="p.id">
-              <td><strong>{{ p.name }}</strong></td>
-              <td class="mono">{{ p.baseUrl }}</td>
-              <td class="mono faint">{{ p.apiKey ? "••••" + p.apiKey.slice(-4) : "未填写" }}</td>
-              <td class="num">{{ modelCount[p.id] ?? 0 }}</td>
-              <td>
-                <span class="badge" :class="p.enabled ? 'badge--ok' : 'badge--off'">
-                  <span class="dot" />
-                  {{ p.enabled ? "启用" : "停用" }}
-                </span>
-              </td>
-              <td>
-                <div class="row" style="justify-content: flex-end">
-                  <button
-                    class="btn btn--ghost btn--sm"
-                    type="button"
-                    :disabled="syncing === p.id"
-                    title="重新拉取该供应商的模型列表"
-                    @click="syncModels(p.id)"
-                  >
-                    <AppIcon name="refresh" :size="13" :class="{ spin: syncing === p.id }" />
-                    拉取模型
-                  </button>
-                  <button class="btn btn--ghost btn--sm" type="button" :disabled="testing === p.id" @click="test(p)">
-                    <AppIcon name="bolt" :size="13" />
-                    测试
-                  </button>
-                  <button class="btn btn--ghost btn--sm btn--icon" type="button" :aria-label="`编辑供应商：${p.name}`" title="编辑供应商" @click="openProvider(p)">
-                    <AppIcon name="edit" :size="13" />
-                  </button>
-                  <button class="btn btn--ghost btn--sm btn--icon" type="button" :aria-label="`删除供应商：${p.name}`" title="删除供应商" @click="removeProvider(p)">
-                    <AppIcon name="trash" :size="13" />
-                  </button>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card__head">
-        <AppIcon name="sparkles" :size="15" />
-        <span class="card__title">模型</span>
-        <span class="card__hint">默认模型用于 AI 作答，未设默认时自动取第一个</span>
-        <button class="btn btn--primary btn--sm" style="margin-left: auto" type="button" @click="openModel()">
-          <AppIcon name="plus" :size="13" />
-          新增模型
-        </button>
-      </div>
-
-      <div v-if="models.length === 0" class="empty">
-        <div class="empty__title">还没有可用模型</div>
-        添加供应商时若自动拉取成功，模型会出现在这里
-      </div>
-      <div v-else class="table-wrap">
-        <table class="table">
-          <thead>
-            <tr>
-              <th>模型</th>
-              <th>供应商</th>
-              <th class="num">温度</th>
-              <th class="num">最大 Token</th>
-              <th>状态</th>
-              <th class="num">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="m in models" :key="m.id">
-              <td>
-                <div class="row">
-                  <strong>{{ m.displayName || m.model }}</strong>
-                  <span v-if="m.isDefault" class="badge badge--ai">默认</span>
-                </div>
-                <div v-if="m.displayName && m.displayName !== m.model" class="mono faint small">
-                  {{ m.model }}
-                </div>
-              </td>
-              <td class="faint">{{ providerName[m.providerId] ?? "-" }}</td>
-              <td class="num">{{ m.temperature }}</td>
-              <td class="num">{{ m.maxTokens }}</td>
-              <td>
-                <span class="badge" :class="m.enabled ? 'badge--ok' : 'badge--off'">
-                  <span class="dot" />
-                  {{ m.enabled ? "启用" : "停用" }}
-                </span>
-              </td>
-              <td>
-                <div class="row" style="justify-content: flex-end">
-                  <button
-                    v-if="!m.isDefault"
-                    class="btn btn--ghost btn--sm"
-                    type="button"
-                    @click="api.saveModel({ ...m, isDefault: true }).then(load)"
-                  >
-                    设为默认
-                  </button>
-                  <button class="btn btn--ghost btn--sm btn--icon" type="button" :aria-label="`编辑模型：${m.displayName || m.model}`" title="编辑模型" @click="openModel(m)">
-                    <AppIcon name="edit" :size="13" />
-                  </button>
-                  <button class="btn btn--ghost btn--sm btn--icon" type="button" :aria-label="`删除模型：${m.displayName || m.model}`" title="删除模型" @click="removeModel(m)">
-                    <AppIcon name="trash" :size="13" />
-                  </button>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
+      </footer>
+    </section>
 
     <AppModal :open="providerModal" title="AI 供应商" @close="providerModal = false">
       <div class="stack">

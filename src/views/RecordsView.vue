@@ -1,15 +1,25 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { api } from "../api";
 import type { SearchRecord } from "../api/types";
 import AppIcon from "../components/AppIcon.vue";
 import QuestionDetails from "../components/QuestionDetails.vue";
+import StatsPanel from "../components/StatsPanel.vue";
 import { useConfirm } from "../composables/useConfirm";
 import { useLiveRefresh } from "../composables/useLiveRefresh";
 import { useToast } from "../composables/useToast";
 import { formatDate, sourceLabel } from "../utils/format";
 
 const toast = useToast();
+const route = useRoute();
+const router = useRouter();
+type Tab = "list" | "stats";
+const tab = ref<Tab>(route.query.tab === "stats" ? "stats" : "list");
+watch(() => route.query.tab, (v) => { tab.value = v === "stats" ? "stats" : "list"; });
+function setTab(t: Tab) { router.replace({ query: t === "stats" ? { tab: "stats" } : {} }); }
+const statusFilter = ref<"" | "success" | "failure">("");
+const shown = computed(() => statusFilter.value ? items.value.filter((r) => r.status === statusFilter.value) : items.value);
 const confirm = useConfirm();
 const selected = ref<SearchRecord | null>(null);
 const clearing = ref(false);
@@ -67,12 +77,25 @@ const { liveConnected } = useLiveRefresh(load);
 
 <template>
   <div class="page">
-    <div class="card">
+    <div class="tabs" role="tablist">
+      <button class="tabs__btn" :class="{ 'is-active': tab === 'list' }" role="tab" :aria-selected="tab === 'list'" type="button" @click="setTab('list')">
+        <AppIcon name="list" :size="14" />答题记录<span class="tabs__count">{{ total }}</span>
+      </button>
+      <button class="tabs__btn" :class="{ 'is-active': tab === 'stats' }" role="tab" :aria-selected="tab === 'stats'" type="button" @click="setTab('stats')">
+        <AppIcon name="chart" :size="14" />统计看板
+      </button>
+    </div>
+    <StatsPanel v-if="tab === 'stats'" />
+    <div v-else class="card">
       <div class="card__head">
         <AppIcon name="list" :size="15" />
-        <span class="card__title">答题记录</span>
-        <span class="card__hint">共 {{ total }} 条</span>
-        <span class="badge badge--off">{{ liveConnected ? '实时更新' : '连接中断，正在重试' }}</span>
+        <div class="segmented segmented--sm" role="group" aria-label="按状态筛选本页">
+          <button v-for="o in [{ v: '', l: '全部' }, { v: 'success', l: '成功' }, { v: 'failure', l: '失败' }]" :key="o.v" class="segmented__btn" :class="{ 'is-active': statusFilter === o.v }" type="button" @click="statusFilter = o.v as typeof statusFilter">{{ o.l }}</button>
+        </div>
+        <span class="live-tag" :class="{ 'is-off': !liveConnected }">
+          <span class="dot" :class="{ 'dot--pulse': liveConnected }" />
+          {{ liveConnected ? "实时更新" : "连接中断，重试中" }}
+        </span>
         <div class="row" style="margin-left: auto">
           <button class="btn btn--sm" type="button" @click="load()">
             <AppIcon name="refresh" :size="13" :class="{ spin: loading }" />
@@ -82,13 +105,13 @@ const { liveConnected } = useLiveRefresh(load);
         </div>
       </div>
 
-      <div v-if="items.length === 0" class="empty">
-        <div class="empty__title">{{ loading ? "加载中…" : "还没有答题记录" }}</div>
+      <div v-if="shown.length === 0" class="empty">
+        <div class="empty__title">{{ loading ? "加载中…" : items.length ? "本页没有符合筛选的记录" : "还没有答题记录" }}</div>
         每一次 OCS 搜题或自测都会记录在这里
       </div>
       <template v-else>
         <div class="table-wrap">
-          <table class="table">
+          <table class="table table--records">
             <thead>
               <tr>
                 <th style="width: 30%">题目</th>
@@ -102,7 +125,7 @@ const { liveConnected } = useLiveRefresh(load);
               </tr>
             </thead>
             <tbody>
-              <tr v-for="r in items" :key="r.id">
+              <tr v-for="r in shown" :key="r.id">
                 <td><button class="cell-link" type="button" :aria-label="`查看答题详情：${r.title || '空题目'}`" @click="selected = r"><span class="cell-clip">{{ r.title || '（空题目）' }}</span></button><span v-if="r.error" class="record-error cell-clip">{{ r.error }}</span></td>
                 <td><div class="mono cell-clip">{{ r.answer || "-" }}</div></td>
                 <td>
@@ -121,7 +144,7 @@ const { liveConnected } = useLiveRefresh(load);
         </div>
 
         <div class="pager">
-          <span>第 {{ page }} / {{ totalPages }} 页</span>
+          <span>共 {{ total }} 条 · 第 {{ page }} / {{ totalPages }} 页</span>
           <button class="btn btn--sm" type="button" :disabled="page <= 1" @click="go(-1)">上一页</button>
           <button class="btn btn--sm" type="button" :disabled="page >= totalPages" @click="go(1)">下一页</button>
         </div>

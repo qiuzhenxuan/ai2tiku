@@ -1,28 +1,39 @@
 <script setup lang="ts">
-import DiagnosticsCard from "../components/DiagnosticsCard.vue";
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from "vue";
+import { onBeforeRouteLeave, useRoute } from "vue-router";
 import { api } from "../api";
-import type { ServerStatus } from "../api/types";
+import type { Settings } from "../api/types";
 import AppIcon from "../components/AppIcon.vue";
+import DiagnosticsCard from "../components/DiagnosticsCard.vue";
+import ThemeToggle from "../components/ThemeToggle.vue";
 import { ACCENT_PRESETS, useAccent } from "../composables/useAccent";
+import { useConfirm } from "../composables/useConfirm";
+import { useServer } from "../composables/useServer";
 import { useTheme } from "../composables/useTheme";
 import { useToast } from "../composables/useToast";
 
 const toast = useToast();
-
+const route = useRoute();
+const confirm = useConfirm();
 const { accent, setAccent } = useAccent();
 const { theme } = useTheme();
+const server = useServer();
 
-/** 色点跟着当前日夜主题取对应那一档，所见即所得 */
+const SECTIONS = [
+  { id: "service", title: "服务与网络", icon: "plug" },
+  { id: "strategy", title: "作答策略", icon: "database" },
+  { id: "prompt", title: "系统提示词", icon: "sparkles" },
+  { id: "appearance", title: "外观", icon: "sun" },
+  { id: "diagnostics", title: "诊断", icon: "check" },
+];
+
 function swatchColor(p: (typeof ACCENT_PRESETS)[number]) {
   return theme.value === "dark" ? p.dark : p.light;
 }
+const activeAccentLabel = computed(() => ACCENT_PRESETS.find((p) => p.id === accent.value)?.label ?? "");
 
-const activeAccentLabel = computed(
-  () => ACCENT_PRESETS.find((p) => p.id === accent.value)?.label ?? "",
-);
-
-const form = reactive({
+/* ---------- 表单与「未保存」检测 ---------- */
+const form = reactive<Settings>({
   port: 3100,
   matchThreshold: 0.85,
   autoCache: true,
@@ -30,17 +41,13 @@ const form = reactive({
   systemPrompt: "",
   proxyUrl: "",
 });
+const saved = ref<Settings | null>(null);
+const dirty = computed(() => !!saved.value && JSON.stringify(form) !== JSON.stringify(saved.value));
+const portChanged = computed(() => !!saved.value && form.port !== saved.value.port);
+const saving = ref(false);
 
-/** 内置提示词原文：用来填充输入框，让用户看得到、也能在此基础上改 */
 const builtinPrompt = ref("");
-
-/** 当前是否在用内置提示词 */
 const usingBuiltin = computed(() => form.systemPrompt.trim() === "");
-
-/**
- * 输入框显示的内容：没自定义时显示内置提示词原文（可读、可改），
- * 一旦用户动手编辑就变成自定义内容（写入 form.systemPrompt）。
- */
 const promptText = computed({
   get: () => (usingBuiltin.value ? builtinPrompt.value : form.systemPrompt),
   set: (v: string) => {
@@ -48,38 +55,25 @@ const promptText = computed({
   },
 });
 
-const status = ref<ServerStatus | null>(null);
-const saving = ref(false);
-const busy = ref(false);
-
 async function load() {
   try {
-    const [s, st, builtin] = await Promise.all([
-      api.getSettings(),
-      api.serverStatus(),
-      api.defaultSystemPrompt(),
-    ]);
+    const [s, builtin] = await Promise.all([api.getSettings(), api.defaultSystemPrompt()]);
     Object.assign(form, s);
-    status.value = st;
+    saved.value = { ...s };
     builtinPrompt.value = builtin;
   } catch (e) {
     toast.fromError(e);
   }
 }
 
-/** 恢复使用内置提示词 */
-function restoreDefault() {
-  form.systemPrompt = "";
-  toast.ok("已恢复内置提示词，点「保存设置」生效");
-}
-
 async function save() {
   saving.value = true;
   try {
-    const saved = await api.saveSettings({ ...form });
-    Object.assign(form, saved);
-    status.value = await api.serverStatus();
-    toast.ok("设置已保存");
+    const next = await api.saveSettings({ ...form });
+    Object.assign(form, next);
+    saved.value = { ...next };
+    await server.refresh();
+    toast.ok(portChanged.value ? "设置已保存，服务已按新端口重启" : "设置已保存");
   } catch (e) {
     toast.fromError(e);
   } finally {
@@ -87,172 +81,197 @@ async function save() {
   }
 }
 
-async function toggleServer() {
-  busy.value = true;
-  try {
-    const next = status.value?.running ? await api.stopServer() : await api.startServer();
-    status.value = next;
-    toast.ok(next.running ? "服务已启动" : "服务已停止");
-  } catch (e) {
-    toast.fromError(e);
-  } finally {
-    busy.value = false;
-  }
+function discard() {
+  if (saved.value) Object.assign(form, saved.value);
 }
 
-onMounted(load);
+onBeforeRouteLeave(async () => {
+  if (!dirty.value) return true;
+  return await confirm({ title: "放弃未保存的设置？", message: "离开后，本页尚未保存的修改将丢失。", confirmText: "放弃修改", danger: true });
+});
+
+/* ---------- 侧边目录 ---------- */
+const activeSection = ref("service");
+function scrollTo(id: string) {
+  activeSection.value = id;
+  document.getElementById(`sec-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+/* Ctrl + S 保存 */
+function onKey(e: KeyboardEvent) {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+    e.preventDefault();
+    if (dirty.value && !saving.value) void save();
+  }
+}
+onUnmounted(() => window.removeEventListener("keydown", onKey));
+
+onMounted(async () => {
+  window.addEventListener("keydown", onKey);
+  await load();
+  const hash = route.hash.replace("#", "") || (route.query.diagnose === "1" ? "diagnostics" : "");
+  if (hash) {
+    await nextTick();
+    scrollTo(hash);
+  }
+});
 </script>
 
 <template>
-  <div class="page">
-    <DiagnosticsCard />
-    <div class="card">
-      <div class="card__head">
-        <AppIcon name="sun" :size="15" />
-        <span class="card__title">主题色</span>
-        <span class="card__hint">默认水墨黑白，也可自选强调色；日间 / 夜间独立切换</span>
-      </div>
-      <div class="card__body">
-        <div class="swatches">
-          <button
-            v-for="p in ACCENT_PRESETS"
-            :key="p.id"
-            type="button"
-            class="swatch"
-            :class="{ 'is-active': accent === p.id }"
-            :style="{ '--swatch': swatchColor(p) }"
-            :title="p.label"
-            :aria-label="p.label"
-            @click="setAccent(p.id)"
-          />
-          <span class="swatches__label">{{ activeAccentLabel }}</span>
-        </div>
-      </div>
-    </div>
+  <div class="settings">
+    <nav class="settings__nav" aria-label="设置分组">
+      <button
+        v-for="s in SECTIONS"
+        :key="s.id"
+        type="button"
+        class="settings__link"
+        :class="{ 'is-active': activeSection === s.id }"
+        @click="scrollTo(s.id)"
+      >
+        <AppIcon :name="s.icon" :size="14" />{{ s.title }}
+      </button>
+    </nav>
 
-    <div class="card">
-      <div class="card__head">
-        <AppIcon name="plug" :size="15" />
-        <span class="card__title">服务端</span>
-        <span class="badge" :class="status?.running ? 'badge--ok' : 'badge--off'" style="margin-left: auto">
-          <span class="dot" :class="{ 'dot--pulse': status?.running }" />
-          {{ status?.running ? `运行中 · ${status?.port}` : "已停止" }}
-        </span>
-      </div>
-      <div class="card__body stack">
-        <div class="field" style="max-width: 220px">
-          <label class="field__label" for="s-port">监听端口</label>
-          <input id="s-port" v-model.number="form.port" class="input" type="number" min="1024" max="65535" />
-          <span class="field__help">修改后保存会自动重启服务</span>
-        </div>
-        <div class="row">
-          <button class="btn btn--primary" type="button" :disabled="saving" @click="save">
-            <AppIcon name="check" :size="14" />
-            保存设置
-          </button>
-          <button class="btn" type="button" :disabled="busy" @click="toggleServer">
-            <AppIcon name="power" :size="14" />
-            {{ status?.running ? "停止服务" : "启动服务" }}
-          </button>
-          <span class="mono faint small">{{ status?.address }}</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card__head">
-        <AppIcon name="globe" :size="15" />
-        <span class="card__title">网络代理</span>
-        <span class="card__hint">留空 = 强制直连</span>
-      </div>
-      <div class="card__body stack">
-        <div class="field" style="max-width: 420px">
-          <label class="field__label" for="s-proxy">代理地址</label>
-          <input id="s-proxy" v-model="form.proxyUrl" class="input" placeholder="http://127.0.0.1:7890" />
-          <span class="field__help">
-            留空则**强制直连**，不使用系统代理。国内模型（智谱 / DeepSeek / 通义等）可直接访问，
-            建议留空；只有访问 OpenAI 这类被墙服务时才需要填写你的代理地址。
+    <div class="page settings__body">
+      <!-- 服务与网络 -->
+      <section id="sec-service" class="card">
+        <div class="card__head">
+          <AppIcon name="plug" :size="15" />
+          <span class="card__title">服务与网络</span>
+          <span class="badge" :class="server.running.value ? 'badge--ok' : 'badge--off'" style="margin-left: auto">
+            <span class="dot" :class="{ 'dot--pulse': server.running.value }" />
+            {{ server.running.value ? `运行中 · ${server.status.value?.port}` : "已停止" }}
           </span>
         </div>
-        <div class="callout callout--warn">
-          <AppIcon name="info" :size="16" />
-          <div>
-            留空的必要性：reqwest 默认会读取 Windows 系统代理。若本机开着代理软件（Clash 等）
-            而它没有正常服务，所有 AI 请求都会失败在
-            <code class="mono">tunnel error → os error 10061</code>。
+        <div class="card__body">
+          <div class="setting-row">
+            <div class="setting-row__text">
+              <strong>本地题库服务</strong>
+              <span>只监听 127.0.0.1，外网无法访问。{{ server.status.value?.address }}</span>
+            </div>
+            <button class="btn" type="button" :disabled="server.busy.value" @click="server.toggle">
+              <AppIcon name="power" :size="13" />{{ server.running.value ? "停止服务" : "启动服务" }}
+            </button>
+          </div>
+          <div class="setting-row">
+            <label class="setting-row__text" for="s-port">
+              <strong>监听端口</strong>
+              <span>保存后自动重启服务；改端口后需要在 OCS 中重新粘贴配置。</span>
+            </label>
+            <input id="s-port" v-model.number="form.port" class="input setting-row__control--narrow" type="number" min="1024" max="65535" />
+          </div>
+          <div class="setting-row setting-row--stack">
+            <label class="setting-row__text" for="s-proxy">
+              <strong>网络代理</strong>
+              <span>留空表示<b>强制直连</b>，不读取系统代理。国内模型建议留空；只有访问 OpenAI 等服务时才需要填写。</span>
+            </label>
+            <input id="s-proxy" v-model="form.proxyUrl" class="input" placeholder="留空 = 直连，例如 http://127.0.0.1:7890" />
+            <details class="disclosure">
+              <summary>为什么默认直连？</summary>
+              <p class="faint small">
+                reqwest 默认读取 Windows 系统代理。若本机开着 Clash 等代理软件但它没有正常工作，所有 AI 请求都会失败在
+                <code class="mono">tunnel error → os error 10061</code>。
+              </p>
+            </details>
           </div>
         </div>
-        <div class="row">
-          <button class="btn btn--primary" type="button" :disabled="saving" @click="save">
-            <AppIcon name="check" :size="14" />
-            保存设置
-          </button>
+      </section>
+
+      <!-- 作答策略 -->
+      <section id="sec-strategy" class="card">
+        <div class="card__head">
+          <AppIcon name="database" :size="15" />
+          <span class="card__title">作答策略</span>
         </div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card__head">
-        <AppIcon name="database" :size="15" />
-        <span class="card__title">题库匹配与作答</span>
-      </div>
-      <div class="card__body stack">
-        <div class="field" style="max-width: 520px">
-          <span class="field__label">自动作答使用精确匹配</span>
-          <span class="field__help">仅在题干、题型及完整选项一致时复用答案；题干发生变化时重新求解，避免“正确 / 不正确”等相似题误答。</span>
-        </div>
-
-        <label class="switch">
-          <input v-model="form.autoCache" type="checkbox" />
-          <span class="switch__track" />
-          <span>AI 答完的题目自动写入本地题库（下次直接命中，省 Token）</span>
-        </label>
-
-        <label class="switch">
-          <input v-model="form.aiFallback" type="checkbox" />
-          <span class="switch__track" />
-          <span>本地未命中时调用 AI 兜底作答</span>
-        </label>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card__head">
-        <AppIcon name="sparkles" :size="15" />
-        <span class="card__title">系统提示词</span>
-        <span class="badge" :class="usingBuiltin ? 'badge--ok' : 'badge--off'" style="margin-left: auto">
-          <span class="dot" />
-          {{ usingBuiltin ? "使用内置" : "自定义" }}
-        </span>
-      </div>
-      <div class="card__body stack">
-        <textarea
-          v-model="promptText"
-          class="textarea"
-          rows="14"
-          spellcheck="false"
-          placeholder="加载中…"
-        />
-        <div class="callout">
-          <AppIcon name="info" :size="16" />
-          <div>
-            上面就是当前实际生效的提示词：未修改时显示内置默认值，直接编辑即成为自定义提示词。
-            自定义时请保留 JSON 输出约定（<code class="mono">answer</code> /
-            <code class="mono">explanation</code>），否则答案格式可能无法被 OCS 正确解析；
-            多选题的答案字母会由程序自动用 <code class="mono">#</code> 连接。
+        <div class="card__body">
+          <div class="setting-row">
+            <div class="setting-row__text">
+              <strong>AI 兜底作答</strong>
+              <span>本地题库未命中时交给 AI 回答；关闭后只返回本地题库的答案。</span>
+            </div>
+            <label class="switch"><input v-model="form.aiFallback" type="checkbox" /><span class="switch__track" /></label>
+          </div>
+          <div class="setting-row">
+            <div class="setting-row__text">
+              <strong>自动缓存 AI 答案</strong>
+              <span>通过格式校验的纯文本题答案写入本地题库，下次直接命中、不再消耗 Token。</span>
+            </div>
+            <label class="switch"><input v-model="form.autoCache" type="checkbox" /><span class="switch__track" /></label>
+          </div>
+          <div class="setting-row">
+            <div class="setting-row__text">
+              <strong>精确匹配</strong>
+              <span>只有题干、题型和完整选项都一致时才复用答案，避免「正确 / 不正确」这类相似题误答。此项固定开启。</span>
+            </div>
+            <span class="badge badge--ok">始终开启</span>
           </div>
         </div>
-        <div class="row">
-          <button class="btn btn--primary" type="button" :disabled="saving" @click="save">
-            <AppIcon name="check" :size="14" />
-            保存设置
-          </button>
-          <button class="btn" type="button" :disabled="usingBuiltin" @click="restoreDefault">
-            <AppIcon name="refresh" :size="14" />
-            恢复内置
+      </section>
+
+      <!-- 系统提示词 -->
+      <section id="sec-prompt" class="card">
+        <div class="card__head">
+          <AppIcon name="sparkles" :size="15" />
+          <span class="card__title">系统提示词</span>
+          <span class="badge" :class="usingBuiltin ? 'badge--ok' : 'badge--ai'">{{ usingBuiltin ? "使用内置" : "已自定义" }}</span>
+          <button class="btn btn--ghost btn--sm" style="margin-left: auto" type="button" :disabled="usingBuiltin" @click="form.systemPrompt = ''">
+            <AppIcon name="refresh" :size="13" />恢复内置
           </button>
         </div>
-      </div>
+        <div class="card__body stack">
+          <textarea v-model="promptText" class="textarea" rows="12" spellcheck="false" placeholder="加载中…" />
+          <p class="faint small">
+            直接编辑即成为自定义提示词。请保留 JSON 输出约定（<code class="mono">answer</code> /
+            <code class="mono">explanation</code>），否则 OCS 可能无法解析答案；多选题字母会自动用
+            <code class="mono">#</code> 连接。
+          </p>
+        </div>
+      </section>
+
+      <!-- 外观（即时生效，不需要保存） -->
+      <section id="sec-appearance" class="card">
+        <div class="card__head">
+          <AppIcon name="sun" :size="15" />
+          <span class="card__title">外观</span>
+          <span class="card__hint">即时生效</span>
+        </div>
+        <div class="card__body">
+          <div class="setting-row">
+            <div class="setting-row__text"><strong>日夜主题</strong><span>默认跟随系统，选择后会被记住。</span></div>
+            <ThemeToggle />
+          </div>
+          <div class="setting-row setting-row--stack">
+            <div class="setting-row__text"><strong>强调色</strong><span>默认水墨黑白，也可以选一个颜色。当前：{{ activeAccentLabel }}</span></div>
+            <div class="swatches">
+              <button
+                v-for="p in ACCENT_PRESETS"
+                :key="p.id"
+                type="button"
+                class="swatch"
+                :class="{ 'is-active': accent === p.id }"
+                :style="{ '--swatch': swatchColor(p) }"
+                :title="p.label"
+                :aria-label="p.label"
+                @click="setAccent(p.id)"
+              />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div id="sec-diagnostics"><DiagnosticsCard /></div>
     </div>
+
+    <!-- 未保存提示条 -->
+    <Transition name="savebar">
+      <div v-if="dirty" class="savebar" role="status">
+        <AppIcon name="info" :size="15" />
+        <span>有尚未保存的修改{{ portChanged ? "，保存后服务将按新端口重启" : "" }}</span>
+        <button class="btn btn--ghost btn--sm" type="button" :disabled="saving" @click="discard">撤销</button>
+        <button class="btn btn--primary btn--sm" type="button" :disabled="saving" @click="save">
+          <AppIcon :name="saving ? 'refresh' : 'check'" :size="13" :class="{ spin: saving }" />保存设置<kbd class="kbd-on-primary">Ctrl S</kbd>
+        </button>
+      </div>
+    </Transition>
   </div>
 </template>

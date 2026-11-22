@@ -48,16 +48,18 @@ export function useOcsConnection() {
   const aiModel = computed(() => info.value?.aiModel ?? null);
   const aiEnabled = computed(() => !!aiModel.value && !!info.value?.aiFallback);
 
-  async function copyConfig() {
-    if (busy.value) return;
+  async function copyConfig(): Promise<boolean> {
+    if (busy.value) return false;
     busy.value = true;
     try {
       if (!await refresh()) throw new Error(error.value || "读取题库配置失败");
       if (!canCopy.value) throw new Error("本地服务尚未启动，请先启动服务再复制配置");
       await writeText(config.value);
       toast.ok("题库 JSON 配置已复制，请粘贴到 OCS 的题库配置中");
+      return true;
     } catch (e) {
       toast.fromError(e);
+      return false;
     } finally {
       busy.value = false;
     }

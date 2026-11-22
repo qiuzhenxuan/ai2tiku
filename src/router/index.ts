@@ -1,59 +1,70 @@
-import { createRouter, createWebHashHistory } from "vue-router";
+import { createRouter, createWebHashHistory, type RouteRecordRaw } from "vue-router";
 
-const routes = [
+export interface NavMeta {
+  title: string;
+  desc: string;
+  icon: string;
+  group: "start" | "data" | "system";
+}
+
+/** 侧栏导航：按「开始使用 / 数据 / 系统」分组 */
+const routes: (RouteRecordRaw & { name: string; meta: NavMeta })[] = [
   {
     path: "/",
-    name: "dashboard",
-    component: () => import("../views/DashboardView.vue"),
-    meta: { title: "概览", desc: "本地 AI 题库的运行状态一览" },
+    name: "home",
+    component: () => import("../views/HomeView.vue"),
+    meta: { title: "首页", desc: "运行状态与接入进度", icon: "dashboard", group: "start" },
   },
   {
-    path: "/deploy",
-    name: "deploy",
-    component: () => import("../views/DeployView.vue"),
-    meta: { title: "一键部署", desc: "把 OCS 脚本装进浏览器并接入本地题库" },
+    path: "/setup",
+    name: "setup",
+    component: () => import("../views/SetupView.vue"),
+    meta: { title: "接入向导", desc: "五步把本地题库接进 OCS", icon: "rocket", group: "start" },
   },
   {
-    path: "/ocs",
-    name: "ocs",
-    component: () => import("../views/OcsConfigView.vue"),
-    meta: { title: "OCS 题库配置", desc: "生成题库配置并接入 OCS 网课助手" },
-  },
-  {
-    path: "/providers",
-    name: "providers",
-    component: () => import("../views/ProvidersView.vue"),
-    meta: { title: "AI 供应商与模型", desc: "配置 OpenAI 兼容的服务与模型" },
+    path: "/models",
+    name: "models",
+    component: () => import("../views/ModelsView.vue"),
+    meta: { title: "AI 模型", desc: "供应商、API Key 与默认模型", icon: "sparkles", group: "start" },
   },
   {
     path: "/questions",
     name: "questions",
     component: () => import("../views/QuestionsView.vue"),
-    meta: { title: "题库管理", desc: "管理本地缓存的题目与答案" },
+    meta: { title: "题库", desc: "本地缓存的题目与答案", icon: "database", group: "data" },
   },
   {
     path: "/records",
     name: "records",
     component: () => import("../views/RecordsView.vue"),
-    meta: { title: "答题记录", desc: "每一次搜题的详细调用记录" },
-  },
-  {
-    path: "/stats",
-    name: "stats",
-    component: () => import("../views/StatsView.vue"),
-    meta: { title: "统计看板", desc: "命中率与 Token 消耗趋势" },
+    meta: { title: "记录与统计", desc: "每次搜题的结果与 Token 消耗", icon: "list", group: "data" },
   },
   {
     path: "/settings",
     name: "settings",
     component: () => import("../views/SettingsView.vue"),
-    meta: { title: "设置", desc: "端口、缓存策略与答题行为" },
+    meta: { title: "设置", desc: "服务、作答策略、外观与诊断", icon: "settings", group: "system" },
   },
+];
+
+/** 旧版地址保留跳转，避免外部链接或习惯失效 */
+const redirects: RouteRecordRaw[] = [
+  { path: "/deploy", redirect: "/setup" },
+  { path: "/ocs", redirect: { path: "/setup", query: { step: "connect" } } },
+  { path: "/providers", redirect: (to) => ({ path: "/models", query: to.query }) },
+  { path: "/stats", redirect: { path: "/records", query: { tab: "stats" } } },
+  { path: "/:pathMatch(.*)*", redirect: "/" },
 ];
 
 export default createRouter({
   history: createWebHashHistory(),
-  routes,
+  routes: [...routes, ...redirects],
 });
+
+export const GROUP_LABELS: Record<NavMeta["group"], string> = {
+  start: "开始使用",
+  data: "数据",
+  system: "系统",
+};
 
 export { routes };

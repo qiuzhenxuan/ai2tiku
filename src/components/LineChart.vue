@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from "vue";
 /** 轻量 SVG 折线图，颜色全部取自 CSS 变量，日夜主题自动适配 */
 const props = withDefaults(
   defineProps<{
@@ -48,7 +49,7 @@ function build() {
   return { coords, line, area, gridLines, innerH, labelIdx, h };
 }
 
-const geo = build();
+const geo = computed(build);
 </script>
 
 <template>

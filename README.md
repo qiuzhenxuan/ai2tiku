@@ -20,6 +20,8 @@ OCS 脚本通过标准的「题库配置」调用它。**先用本地题库匹�
 
 ## 更新记录
 
+2026-11-22（v0.3.0）：前端重构为 6 个页面与五步接入向导，首页显示接入进度；AI 模型按供应商卡片管理；设置分组并支持撤销与快捷键；整体换成毛玻璃视觉，统一圆角与对齐，适配 900×600 小窗口。
+
 2026-10-23（v0.2.5，WebView 主版本）：新增完整失败追踪、题库 JSON 备份与导入恢复、概览和记录实时更新、一键诊断、统一确认框及长题详情抽屉。保留黑白水墨视觉、毛笔无限标志、平滑折叠侧栏、方向引导、连续尾焰与控件反馈，继续读取原数据库。
 详细变化、升级说明与验证结果见 [更新日志](CHANGELOG.md)。
 
@@ -71,11 +73,11 @@ WebView 主版本的黑白水墨主题（演示数据）：
 
 ## 下载
 
-去 [v0.2.5 Release](https://github.com/qiuzhenxuan/ai2tiku/releases/tag/v0.2.5) 下载 Windows x64 主版本：
+去 [v0.3.0 Release](https://github.com/qiuzhenxuan/ai2tiku/releases/tag/v0.3.0) 下载 Windows x64 主版本：
 
 | 文件 | 界面与运行要求 |
 | --- | --- |
-| [ai2tiku-webview-windows-x64.exe](https://github.com/qiuzhenxuan/ai2tiku/releases/download/v0.2.5/ai2tiku-webview-windows-x64.exe) | Vue + Tauri 界面，包含本轮交互修复，需要 WebView2 Runtime |
+| [ai2tiku-webview-windows-x64.exe](https://github.com/qiuzhenxuan/ai2tiku/releases/download/v0.3.0/ai2tiku-webview-windows-x64.exe) | Vue + Tauri 界面，包含本轮交互修复，需要 WebView2 Runtime |
 
 升级前先退出正在运行的旧版。Release 同时提供 EXE 的 `.sha256` 和汇总 `SHA256SUMS.txt`。历史 v0.2.1 双版本仍在旧 Release 中保留。
 

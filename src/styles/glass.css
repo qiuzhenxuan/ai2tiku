@@ -707,3 +707,21 @@ kbd, .cell-link, .confirm-check input { border-radius: var(--r-xs); }
 /* 设置齿轮的线条几乎铺满画布（1–23），比其他图标（约 4.5–19.5）大一圈。
    用独立的 scale 属性缩到 86%，不影响悬停 rotate 与点击彩蛋；描边加粗补偿，粗细与其他图标一致。 */
 .rail__item--settings svg { scale: .86; stroke-width: 2.2; }
+
+/* 展开 / 收起时图标不再左右晃动：
+   原先收起态用 48px 宽 + 居中，展开时侧栏宽度与导航宽度同时做弹簧过渡，
+   居中偏移先变大再回落，图标会先右移再弹回。改为左右固定 12px 内边距、贴左拉伸，
+   收起时 72 − 24 = 48px 仍居中，展开过程中图标横向位置保持不变。 */
+.rail { padding-left: 12px; padding-right: 12px; align-items: stretch; }
+.rail:not(.rail--expanded) :is(.rail__nav, .rail__toggle, .rail__brand, .rail__group) {
+  width: auto; align-self: stretch;
+}
+.rail__nav, .rail__toggle, .rail__brand { transition: none; }
+
+/* 分组标题快速开关时跳动：
+   原先收起时 padding-left 由 16px 瞬间变 0，而文字还在 160ms 淡出中，
+   于是文字会在分隔线旁左右跳。改为左边距保持不变，收起时文字立即隐藏，
+   展开时与菜单文字同步延迟淡入。 */
+.rail:not(.rail--expanded) .rail__group { padding-left: 16px; }
+.rail:not(.rail--expanded) .rail__group span { opacity: 0; visibility: hidden; transition: none; }
+.rail--expanded .rail__group span { opacity: 1; visibility: visible; transition: opacity 180ms var(--ease) 90ms; }
